@@ -164,7 +164,10 @@ async function play() {
   show('game');
   const hud = { time: $('hud-time'), score: $('hud-score'), level: $('hud-level'), hp: $('hud-hp'), threat: $('hud-threat'),
     boss: $('hud-boss'), bossName: $('hud-boss-name'), bossHp: $('hud-boss-hp') };
-  const record = await startGame($('game-canvas'), hud, todayKST(), { choose, hero, tier: tierOf(scoreFor(hero)) });
+  const record = await startGame($('game-canvas'), hud, todayKST(), { choose, pause, hero, tier: tierOf(scoreFor(hero)) });
+  // 일시정지에서 그만두면 기록을 보내지 않는다
+  if (record.aborted === 'restart') return play();
+  if (record.aborted === 'lobby') return enterLobby(user);
   show('result');
   $('result-time').textContent = `${Math.floor(record.time / 60)}분 ${Math.floor(record.time % 60)}초`;
   $('result-kills').textContent = Object.entries(record.kills)
@@ -192,10 +195,10 @@ function choose(cards) {
   const box = $('levelup-cards');
   box.replaceChildren(...cards.map((c, i) => {
     const b = document.createElement('button');
-    b.className = 'card';
-    b.innerHTML = `<kbd>${i + 1}</kbd><strong></strong><span></span>`;
+    b.className = `card grade-${c.grade}`;
+    b.innerHTML = `<span class="card-top"><kbd>${i + 1}</kbd><em class="grade">${c.grade}</em></span><strong></strong><span></span>`;
     b.querySelector('strong').textContent = c.name;
-    b.querySelector('span').textContent = c.desc;
+    b.querySelector('span:last-child').textContent = c.desc;
     return b;
   }));
   $('levelup').hidden = false;
@@ -208,6 +211,24 @@ function choose(cards) {
     const onKey = e => { const i = Number(e.key) - 1; if (cards[i]) pick(i); };
     addEventListener('keydown', onKey);
     [...box.children].forEach((b, i) => { b.onclick = () => pick(i); });
+  });
+}
+
+// 일시정지 메뉴. ESC를 다시 누르면 계속한다
+function pause() {
+  $('pause').hidden = false;
+  $('btn-resume').focus();
+  return new Promise(resolve => {
+    const done = act => {
+      removeEventListener('keydown', onKey);
+      $('pause').hidden = true;
+      resolve(act);
+    };
+    const onKey = e => { if (e.code === 'Escape') done('resume'); };
+    addEventListener('keydown', onKey);
+    $('btn-resume').onclick = () => done('resume');
+    $('btn-restart').onclick = () => done('restart');
+    $('btn-quit').onclick = () => done('lobby');
   });
 }
 

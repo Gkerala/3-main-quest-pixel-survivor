@@ -697,6 +697,7 @@ export function gameArt(hero = 'sprout', tier = 1) {
     ...sharedArt,
     hero: mapAnims(heroAnims(hero, tier), a => flatten(a, true, 8, 10)),
     bolt: hero === 'frost' ? [bake(icicle(12))] : [0, 1].map(i => bake(gooBall(PAL.sprout, i))),
+    orb: [0, 1].map(i => bake(gooBall(PAL[hero], i))), // 튀는 방울: 영웅 색
   };
   artCache.set(key, art);
   return art;

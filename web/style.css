@@ -119,8 +119,11 @@ input:focus { outline: none; box-shadow: 0 -3px 0 0 var(--mana), 0 3px 0 0 var(-
 }
 
 /* 3. 게임 */
-body.playing main { max-width: 1240px; padding-top: 24px; }
-.stage { position: relative; width: min(1200px, 100%); aspect-ratio: 16 / 9; }
+/* 게임 중에는 창에 딱 맞춘다: 16:9를 지키면서 창 안에 들어가는 가장 큰 크기, 스크롤 없음 */
+body.playing { overflow: hidden; }
+body.playing main { max-width: none; height: 100vh; height: 100dvh; padding: 0; }
+body.playing #screen-game { height: 100%; justify-content: center; gap: 0; }
+.stage { position: relative; width: min(100vw, 100vh * 16 / 9); width: min(100vw, 100dvh * 16 / 9); aspect-ratio: 16 / 9; }
 #game-canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; cursor: crosshair; }
 .hud {
   position: absolute; inset: 10px 10px auto; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
@@ -143,6 +146,7 @@ body.playing main { max-width: 1240px; padding-top: 24px; }
   background: rgba(10, 14, 12, .8);
 }
 .levelup[hidden] { display: none; }
+.pause-menu { display: flex; flex-direction: column; gap: 6px; width: min(260px, 80%); }
 .levelup-title { margin: 0; font: 700 32px var(--title); color: var(--ember); text-shadow: 0 4px 0 #000; }
 .cards { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; padding: 16px; }
 .card {
@@ -159,6 +163,12 @@ body.playing main { max-width: 1240px; padding-top: 24px; }
 .card strong { font: 700 16px var(--title); color: var(--ember); }
 .card span { color: var(--dim); }
 .card kbd { align-self: flex-start; font: 11px var(--ui); padding: 0 6px; background: var(--night); color: var(--dim); }
+/* 카드 등급: A 기본 공격 강화(금), B 추가 공격(보라), C 영웅 고유(파랑), D 공통(초록), E 이동·회복(회색) */
+.card { --grade: var(--edge); box-shadow: 0 -3px 0 0 var(--grade), 0 3px 0 0 var(--grade), -3px 0 0 0 var(--grade), 3px 0 0 0 var(--grade); }
+.grade-A { --grade: #f0c040; } .grade-B { --grade: #b07ad0; } .grade-C { --grade: var(--mana); } .grade-D { --grade: #5ab82a; } .grade-E { --grade: #7d8699; }
+.card-top { display: flex; justify-content: space-between; align-items: center; }
+.card .grade { font: 700 13px var(--title); font-style: normal; padding: 0 7px; color: #14100a; background: var(--grade); }
+.grade-A { background: linear-gradient(180deg, #3a3018, var(--moss) 60%); }
 
 /* 4. 결과 */
 .scores { gap: 14px; }
