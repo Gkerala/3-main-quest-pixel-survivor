@@ -95,4 +95,22 @@ input:focus { outline: 2px solid var(--teal); outline-offset: 1px; }
   background: #000; border: 2px solid var(--accent); padding: 10px 16px; max-width: calc(100% - 32px);
 }
 .note { width: min(380px, 100%); margin: 0; padding: 10px 12px; border: 2px dashed var(--accent); color: var(--accent); font-size: 13px; }
+.google-slot[hidden] { display: none; }
 .google-slot { display: flex; flex-direction: column; align-items: center; gap: 6px; min-height: 44px; }
+
+.levelup {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+  background: rgba(10, 8, 16, .78); font: 13px var(--pixel); color: var(--accent);
+}
+.levelup[hidden] { display: none; }
+.cards { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; padding: 0 16px; }
+.card {
+  width: 170px; padding: 14px; display: flex; flex-direction: column; gap: 6px; text-align: left; cursor: pointer;
+  font: 14px/1.4 system-ui, 'Malgun Gothic', sans-serif; color: var(--text);
+  background: var(--panel); border: 3px solid var(--line); box-shadow: 4px 4px 0 #0b0a10;
+}
+.card:hover, .card:focus-visible { border-color: var(--accent); outline: none; }
+.card strong { font-size: 16px; color: var(--accent); }
+.card span { color: var(--dim); font-size: 13px; }
+.card kbd { font: 10px var(--pixel); color: var(--dim); }
+#game-canvas { cursor: crosshair; }

@@ -3,7 +3,7 @@
 
 export const MAX_TIME = 1200; // 초. 설계상 이보다 오래 버틸 수 없다
 
-// from: 등장 시각(초). 늦게 나오는 몹일수록 강하고 점수가 높다
+// from: 등장 위협도. 늦게 나오는 몹일수록 강하고 점수가 높다
 export const MOBS = {
   slime:  { name: '슬라임', hp: 20,  speed: 45, dmg: 8,  score: 1,  xp: 1,  from: 0 },
   bat:    { name: '박쥐',   hp: 35,  speed: 85, dmg: 10, score: 3,  xp: 2,  from: 90 },
@@ -11,18 +11,41 @@ export const MOBS = {
   golem:  { name: '골렘',   hp: 700, speed: 65, dmg: 35, score: 30, xp: 20, from: 420 },
 };
 
-export const spawnInterval = t => Math.max(0.12, 1.1 - t / 360);
-export const hpScale = t => 1 + t / 150;
-export const dmgScale = t => 1 + t / 200;
+// 위협도: 시간이 지나도, 몹을 처치해도 오른다. 빨리 처치할수록 빨리 어려워진다
+export const KILL_THREAT = 0.25; // 처치 1마리 = 위협도 0.25 (1초 = 1)
+export const threatOf = (time, kills) => time + kills * KILL_THREAT;
+
+// 아래 셋은 모두 위협도를 받는다. spawnInterval의 기울기가 -1보다 완만해야 서버 상한 계산이 맞다
+export const spawnInterval = threat => Math.max(0.12, 1.1 - threat / 360);
+// 위협도 600(늦어도 10분)부터는 제곱으로 급격히 강해져 끝없이 버틸 수 없다
+const OVERTIME = 600;
+const overtime = threat => Math.max(0, threat - OVERTIME) ** 2 / 3000;
+export const hpScale = threat => 1 + threat / 200 + overtime(threat);
+export const dmgScale = threat => 1 + threat / 250 + overtime(threat);
 export const FIRST_SPAWN = 0.5;
 
-export const unlocked = t => Object.keys(MOBS).filter(k => MOBS[k].from <= t);
+export const unlocked = threat => Object.keys(MOBS).filter(k => MOBS[k].from <= threat);
 
-// 게임과 똑같은 계산으로 0~T초 사이의 출현 시각을 만든다
-export function spawnTimes(T) {
-  const out = [];
-  for (let t = FIRST_SPAWN; t <= T; t += spawnInterval(t)) out.push(t);
-  return out;
+// 서버 검증용 상한: 나온 몹을 나오자마자 모두 처치했다고 치면 위협도가 가장 빨리 올라
+// 어떤 플레이보다 출현이 많거나 같다. 0~T초의 출현 시각을 돌려준다
+export function spawnBound(T) {
+  const times = [];
+  for (let t = FIRST_SPAWN; t <= T;) {
+    const threat = threatOf(t, times.length);
+    times.push(t);
+    t += spawnInterval(threat);
+  }
+  return times;
+}
+
+// 위협도가 처음 F에 닿을 수 있는 가장 이른 시각 (위 상한 기준)
+function earliestThreat(F, times) {
+  for (let j = 0; j <= times.length; j++) {
+    const start = j ? times[j - 1] : 0, end = j < times.length ? times[j] : Infinity;
+    const t = Math.max(start, F - KILL_THREAT * j);
+    if (t <= end) return t;
+  }
+  return Infinity;
 }
 
 export const scoreOf = kills =>
@@ -56,12 +79,11 @@ export function validateRecord({ time, kills }) {
     if (!MOBS[k]) return { ok: false, reason: `모르는 몹: ${k}` };
     if (!Number.isInteger(n) || n < 0) return { ok: false, reason: `처치 수가 틀림: ${k}` };
   }
-  const times = spawnTimes(time);
+  const times = spawnBound(time);
   const total = Object.values(kills).reduce((a, b) => a + b, 0);
-  if (total > times.length) return { ok: false, reason: '나온 몹보다 많이 처치함' };
+  if (total > times.length) return { ok: false, reason: '나올 수 있는 몹보다 많이 처치함' };
   for (const k of Object.keys(kills)) {
-    const possible = times.filter(t => t >= MOBS[k].from).length;
-    if (kills[k] > possible) return { ok: false, reason: `${MOBS[k].name}가 나오기 전에 처치함` };
+    if (kills[k] > 0 && earliestThreat(MOBS[k].from, times) > time) return { ok: false, reason: `${MOBS[k].name}가 나오기 전에 처치함` };
   }
   return { ok: true, score: scoreOf(kills) };
 }

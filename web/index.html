@@ -52,7 +52,7 @@
       <button class="btn" data-soon>환경설정</button>
       <button class="btn" data-soon>도감</button>
     </nav>
-    <p class="hint">WASD 또는 방향키로 움직입니다. 공격은 자동입니다.</p>
+    <p class="hint">WASD로 움직이고, 마우스를 향해 자동으로 공격합니다. 몹을 처치할수록 적도 빨리 강해집니다.</p>
   </section>
 
   <!-- 3. 게임 -->
@@ -64,6 +64,11 @@
         <span>⏱ <b id="hud-time">00:00</b></span>
         <span>점수 <b id="hud-score">0</b></span>
         <span>Lv <b id="hud-level">1</b></span>
+        <span title="시간과 처치 수로 오른다. 높을수록 적이 강하다">위협 <b id="hud-threat">0</b></span>
+      </div>
+      <div id="levelup" class="levelup" hidden>
+        <p>레벨 업! 강화를 하나 고르세요</p>
+        <div id="levelup-cards" class="cards"></div>
       </div>
     </div>
   </section>

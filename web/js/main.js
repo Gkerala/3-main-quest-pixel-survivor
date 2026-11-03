@@ -66,8 +66,8 @@ $('btn-play').onclick = play;
 // 게임 → 결과
 async function play() {
   show('game');
-  const hud = { time: $('hud-time'), score: $('hud-score'), level: $('hud-level'), hp: $('hud-hp') };
-  const record = await startGame($('game-canvas'), hud, todayKST());
+  const hud = { time: $('hud-time'), score: $('hud-score'), level: $('hud-level'), hp: $('hud-hp'), threat: $('hud-threat') };
+  const record = await startGame($('game-canvas'), hud, todayKST(), { choose });
   show('result');
   $('result-time').textContent = `${Math.floor(record.time / 60)}분 ${Math.floor(record.time % 60)}초`;
   $('result-kills').textContent = Object.entries(record.kills)
@@ -84,9 +84,34 @@ async function play() {
     toast(`기록 저장 실패: ${e.message}`);
   }
 }
+// 레벨업 카드 3장. 클릭하거나 숫자키 1·2·3으로 고른다
+function choose(cards) {
+  const box = $('levelup-cards');
+  box.replaceChildren(...cards.map((c, i) => {
+    const b = document.createElement('button');
+    b.className = 'card';
+    b.innerHTML = `<kbd>${i + 1}</kbd><strong></strong><span></span>`;
+    b.querySelector('strong').textContent = c.name;
+    b.querySelector('span').textContent = c.desc;
+    return b;
+  }));
+  $('levelup').hidden = false;
+  return new Promise(resolve => {
+    const pick = i => {
+      removeEventListener('keydown', onKey);
+      $('levelup').hidden = true;
+      resolve(cards[i]);
+    };
+    const onKey = e => { const i = Number(e.key) - 1; if (cards[i]) pick(i); };
+    addEventListener('keydown', onKey);
+    [...box.children].forEach((b, i) => { b.onclick = () => pick(i); });
+  });
+}
+
 $('btn-again').onclick = play;
 $('btn-lobby').onclick = () => enterLobby(user);
 
 // 이전에 로그인했으면 바로 대기 화면으로
-if (token.get()) api.me().then(r => enterLobby(r.user), () => show('start'));
+// 확인하는 동안은 아무 화면도 보이지 않게 한다 (그 사이 시작 화면 버튼이 눌리지 않게)
+if (token.get()) { show('none'); api.me().then(r => enterLobby(r.user), () => show('start')); }
 else show('start');
