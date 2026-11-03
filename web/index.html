@@ -49,6 +49,7 @@
       <p class="today-label">오늘의 패턴</p>
       <p id="lobby-date" class="today-date"></p>
       <p class="hint">새 패턴까지 <b id="lobby-next">--:--:--</b></p>
+      <div id="hero-list" class="hero-list" role="radiogroup" aria-label="영웅 고르기"></div>
       <button id="btn-play" class="btn primary big">게임 시작</button>
     </div>
     <nav class="menu">
@@ -56,7 +57,7 @@
       <button class="btn tile" data-soon>프로필 설정</button>
       <button class="btn tile" data-soon>상점</button>
       <button class="btn tile" data-soon>환경설정</button>
-      <button class="btn tile" data-soon>도감</button>
+      <button id="btn-dex" class="btn tile">도감</button>
     </nav>
     <p class="hint keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 로 움직이고, 마우스 쪽으로 자동 공격합니다. 많이 처치할수록 적도 빨리 강해집니다.</p>
   </section>
@@ -72,6 +73,7 @@
         <span class="stat"><i>Lv</i><b id="hud-level">1</b></span>
         <span class="stat threat" title="시간과 처치 수로 오릅니다. 높을수록 적이 강합니다"><i>위협</i><b id="hud-threat">0</b></span>
       </div>
+      <div id="hud-boss" class="bossbar" hidden><b id="hud-boss-name"></b><div class="bar"><div id="hud-boss-hp"></div></div></div>
       <div id="levelup" class="levelup" hidden>
         <p class="levelup-title">레벨 업</p>
         <p class="hint">강화를 하나 고르세요. 숫자키 1·2·3도 됩니다</p>
@@ -84,6 +86,7 @@
   <section id="screen-result" class="screen" hidden>
     <h2 class="logo small">GAME OVER</h2>
     <div class="panel scores">
+      <p id="result-boss" class="boss-note" hidden></p>
       <p id="result-new" class="new-best" hidden>최고 기록 갱신</p>
       <div class="score-main"><span>이번 점수</span><b id="result-score"></b></div>
       <div><span>내 최고 점수</span><b id="result-best"></b></div>
@@ -98,6 +101,12 @@
     </div>
   </section>
 </main>
+<dialog id="dex" class="dex">
+  <h2>도감</h2>
+  <p class="hint">처치한 적과 이긴 보스만 모습이 보입니다.</p>
+  <div id="dex-list" class="dex-list"></div>
+  <button id="dex-close" class="btn">닫기</button>
+</dialog>
 <div id="toast" role="status" hidden></div>
 <script src="https://accounts.google.com/gsi/client" async></script>
 <script type="module" src="js/main.js"></script>

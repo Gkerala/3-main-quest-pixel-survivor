@@ -171,6 +171,45 @@ body.playing main { max-width: 1240px; padding-top: 24px; }
 .scores dd { margin: 0; }
 .actions { width: min(360px, 100%); }
 
+/* 영웅 고르기 */
+.hero-list { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; width: min(620px, calc(100vw - 32px)); margin-top: 18px; }
+@media (max-width: 600px) { .hero-list { grid-template-columns: repeat(2, 1fr); } }
+.hero {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px; margin: 3px;
+  font: 12px var(--ui); color: var(--bone); background: rgba(34, 48, 42, .9); cursor: pointer;
+  box-shadow: 0 -3px 0 0 var(--edge), 0 3px 0 0 var(--edge), -3px 0 0 0 var(--edge), 3px 0 0 0 var(--edge);
+}
+.hero canvas { width: 48px; height: 48px; image-rendering: pixelated; }
+.hero strong { font-size: 13px; }
+.hero small { color: var(--dim); font-size: 11px; line-height: 1.4; }
+.hero .grow { width: 100%; height: 4px; background: var(--night); }
+.hero .grow i { display: block; height: 100%; background: var(--ember); }
+.hero[aria-checked="true"] { box-shadow: 0 -3px 0 0 var(--ember), 0 3px 0 0 var(--ember), -3px 0 0 0 var(--ember), 3px 0 0 0 var(--ember); }
+.hero:disabled { cursor: not-allowed; color: var(--dim); }
+.hero:focus-visible { outline: 2px solid var(--mana); outline-offset: 5px; }
+
+/* 보스 체력 막대 */
+.bossbar { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); width: min(420px, 70%); text-align: center; pointer-events: none; }
+.bossbar[hidden] { display: none; }
+.bossbar b { font: 700 13px var(--title); color: var(--ember); text-shadow: 0 2px 0 #000; }
+.bossbar .bar { height: 10px; margin-top: 4px; background: #2a1438; box-shadow: 0 0 0 2px #000; }
+#hud-boss-hp { height: 100%; width: 100%; background: #b07ad0; }
+
+.boss-note { margin: 0; padding: 8px 10px; background: rgba(95, 179, 201, .14); color: var(--mana); font-size: 13px; }
+
+/* 도감 */
+.dex {
+  width: min(560px, calc(100vw - 32px)); padding: 22px; border: 0; color: var(--bone); background: var(--moss);
+  box-shadow: 0 -3px 0 0 var(--edge), 0 3px 0 0 var(--edge), -3px 0 0 0 var(--edge), 3px 0 0 0 var(--edge);
+}
+.dex::backdrop { background: rgba(10, 14, 12, .75); }
+.dex h2 { margin: 0 0 4px; font: 700 20px var(--title); color: var(--ember); }
+.dex-list { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 14px 0; }
+@media (max-width: 600px) { .dex-list { grid-template-columns: repeat(2, 1fr); } }
+.dex-item { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; background: var(--night); font-size: 12px; text-align: center; }
+.dex-item canvas { width: 48px; height: 48px; image-rendering: pixelated; }
+.dex-item small { color: var(--dim); font-size: 11px; }
+
 #toast {
   position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
   background: var(--night); padding: 10px 16px; max-width: calc(100% - 32px);

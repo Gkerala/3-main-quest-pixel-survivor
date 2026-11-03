@@ -4,7 +4,7 @@ import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
-import { validateRecord } from '../web/js/rules.js';
+import { validateRecord, addToProgress } from '../web/js/rules.js';
 
 const USERNAME = /^[a-zA-Z0-9_]{3,20}$/;
 const MIN_PASSWORD = 6;
@@ -20,6 +20,7 @@ const publicUser = u => ({
   id: u.id,
   name: u.username ?? (u.googleSub ? u.name : `게스트${u.id}`),
   status: u.status,
+  progress: u.progress ?? {}, // 얻은 영웅, 영웅별 누적 점수, 도감
 });
 
 export function createApp({ store, jwtSecret, verifyGoogle, corsOrigins }) {
@@ -107,14 +108,23 @@ export function createApp({ store, jwtSecret, verifyGoogle, corsOrigins }) {
   // 기록 보내기. 점수는 받지 않고 서버가 처치 수로 다시 계산한다. 불가능한 기록은 버그로 표시해 저장한다
   app.post('/api/records', async (req, res) => {
     const user = await requireUser(req);
-    const { time, kills } = req.body ?? {};
+    const { time, kills, hero = 'sprout', boss = null, pierce = 0, lowHp = false } = req.body ?? {};
     const isCount = n => Number.isInteger(n) && n >= 0;
     if (!Number.isFinite(time) || !kills || typeof kills !== 'object' || Array.isArray(kills) || !Object.values(kills).every(isCount)) {
       throw new HttpError(400, '기록 형식이 틀립니다');
     }
-    const check = validateRecord({ time, kills });
-    await store.addRecord({ userId: user.id, time, kills, score: check.ok ? check.score : 0, valid: check.ok });
-    res.status(201).json({ valid: check.ok, reason: check.reason, score: check.ok ? check.score : 0, best: await store.bestScore(user.id) });
+    const record = { time, kills, hero, boss, pierce, lowHp };
+    let check = validateRecord(record);
+    // 보스를 이겨서 얻지 않은 영웅으로 낸 기록은 버그로 본다
+    if (check.ok && hero !== 'sprout' && !user.progress?.heroes?.includes(hero)) check = { ok: false, reason: `아직 얻지 않은 영웅: ${hero}` };
+    const score = check.ok ? check.score : 0;
+    await store.addRecord({ userId: user.id, time, kills, score, valid: check.ok, hero: String(hero), boss: boss?.key ?? null, bossKilled: !!boss?.killed });
+    let progress = user.progress ?? {}, unlocked = null;
+    if (check.ok) {
+      ({ progress, unlocked } = addToProgress(progress, record, score));
+      await store.updateUser(user.id, { progress });
+    }
+    res.status(201).json({ valid: check.ok, reason: check.reason, score, best: await store.bestScore(user.id), progress, unlocked });
   });
 
   // 내 기록 보기

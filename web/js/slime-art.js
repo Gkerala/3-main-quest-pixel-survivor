@@ -75,12 +75,12 @@ function face(g, pal, at, { eyes, mouth, k = 1 }) {
   else if (mouth === 'teeth') { rect(g, mx - k, my, 4 * k, 2 * k, '#5a1020'); rect(g, mx - k, my, k, k, WHITE); rect(g, mx + 2 * k, my, k, k, WHITE); }
 }
 
-function slime16(pal, { sx = 1, sy = 1, dx = 0, eyes = 'normal', mouth = 'smile', hit = false, glow = 0, deco = true }) {
+function slime16(pal, { sx = 1, sy = 1, dx = 0, eyes = 'normal', mouth = 'smile', hit = false, glow = 0, deco = true, tier = 1 }) {
   const base = fromRows(HERO_ROWS, { o: OUT, l: pal.light, b: pal.base, d: pal.dark, s: pal.shine });
   const g = shift(resample(base, sx, sy), dx, 0);
   const fx = x => Math.round((x + 0.5 - 8) * sx + 8 - 0.5) + dx, fy = y => Math.round((y - 15) * sy + 15);
   face(g, pal, { eyes: [[fx(4), fy(10)], [fx(10), fy(10)]], blush: [[fx(3), fy(12)], [fx(12), fy(12)]], mouth: [fx(7), fy(12)] }, { eyes, mouth });
-  if (deco) pal.deco?.(g, { c: 7 + dx, top: fy(5), glow });
+  if (deco) pal.deco?.(g, { c: 7 + dx, top: fy(5), glow, tier });
   return hit ? flash(g) : g;
 }
 
@@ -105,15 +105,20 @@ function slime32(pal, { bw = 26, bh = 20, lift = 0, eyes = 'normal', mouth = 'sm
     else if (u < -0.2 && v < 0.55) c = pal.light;
     set(g, x, y, edge ? OUT : c);
   }
-  // 수정 면: 몸 안에만 짧은 빛줄기
+  // 수정 면: 몸 안에만 짧은 빛줄기 (수정·얼음 슬라임만)
   const inBody = (x, y) => { const c = get(g, x, y); return c && c !== OUT; };
-  for (const [x0, y0, len, col] of [[cx - 9, top + 5, 6, pal.shine], [cx + 3, top + 4, 5, pal.light], [cx - 2, top + 12, 4, pal.light]]) {
+  if (pal.bigDeco || pal.facets) for (const [x0, y0, len, col] of [[cx - 9, top + 5, 6, pal.shine], [cx + 3, top + 4, 5, pal.light], [cx - 2, top + 12, 4, pal.light]]) {
     for (let i = 0; i < len; i++) if (inBody(x0 + i, y0 + i)) set(g, x0 + i, y0 + i, col);
   }
   rect(g, cx - 8, top + 3, 3, 1, pal.shine); rect(g, cx - 8, top + 4, 1, 1, pal.shine);
   const ey = Math.round(top + bh * 0.46);
   face(g, pal, { eyes: [[cx - 8, ey], [cx + 4, ey]], blush: [[cx - 11, ey + 5], [cx + 9, ey + 5]], mouth: [cx - 2, ey + 5] }, { eyes, mouth, k });
-  if (deco) pal.deco?.(g, { c: cx - 1, top, k });
+  if (deco && pal.bigDeco) pal.deco(g, { c: cx - 1, top, k });
+  else if (deco) {
+    const d = grid(16, 16);
+    pal.deco(d, { c: 7, top: top >> 1, tier: 3, glow: 1 });
+    d.px.forEach((col, i) => col && rect(g, 1 + (i % 16) * 2, (top & 1) + ((i / 16) | 0) * 2, 2, 2, col));
+  }
   return hit ? flash(g) : g;
 }
 
@@ -201,28 +206,60 @@ function shards(r) {
 }
 
 // ── 슬라임 정의 ─────────────────────────────────────────
-// 장식은 머리 위 가운데(c = 가운데 두 칸 중 왼쪽)를 기준으로 찍는다
+// 장식은 머리 위 가운데(c = 가운데 두 칸 중 왼쪽)를 기준으로 찍는다. tier: 성장 단계 1~3
+const gem = (g, x, y, col) => { set(g, x, y - 1, OUT); set(g, x - 1, y, OUT); set(g, x + 1, y, OUT); set(g, x, y + 1, OUT); set(g, x, y, col); };
+const sparkle = (g, x, y, col) => { set(g, x, y, col); set(g, x - 1, y, col); set(g, x + 1, y, col); set(g, x, y - 1, col); set(g, x, y + 1, col); };
+// 머리 위 불꽃. 아래가 넓고 위로 갈수록 좁아진다
+function flame(g, c, top, h) {
+  for (let i = 1; i <= h; i++) {
+    const w = Math.max(0, Math.round((h - i) * 0.6));
+    for (let x = c - w; x <= c + 1 + w; x++) set(g, x, top + 1 - i, i === h ? '#fff07a' : i > h / 2 ? '#ffd84a' : '#ff8a2a');
+  }
+}
+
 const deco = {
-  sprout: (g, { c, top }) => {
+  sprout: (g, { c, top, tier = 1 }) => {
     set(g, c + 1, top - 1, '#3a7a1a'); set(g, c + 1, top - 2, '#3a7a1a');
     rect(g, c + 2, top - 3, 2, 1, '#8ae04a'); set(g, c + 2, top - 2, '#5ab82a'); rect(g, c - 1, top - 3, 2, 1, '#5ab82a');
-  },
-  frost: (g, { c, top, glow }) => {
-    const tip = glow ? WHITE : '#dff8ff';
-    for (const [x, h] of [[c - 3, 2], [c, 3 + glow], [c + 1, 3 + glow], [c + 4, 2]]) {
-      for (let i = 1; i <= h; i++) set(g, x, top + 1 - i, i === h ? tip : '#8ad8f8');
+    if (tier === 2) { set(g, c + 1, top - 3, '#ff8ab8'); set(g, c + 1, top - 4, '#ffc8e0'); } // 꽃망울
+    if (tier >= 3) { // 활짝 핀 꽃, 몸에 핀 작은 꽃, 둘레의 풀빛 가루
+      for (const [x, y] of [[c, -4], [c + 2, -4], [c + 1, -5], [c + 1, -3]]) set(g, x, top + y, '#ff8ab8');
+      set(g, c + 1, top - 4, '#ffd84a');
+      set(g, c - 4, top + 2, '#ffc8e0'); set(g, c + 5, top + 3, '#ffc8e0');
+      for (const [x, y] of [[c - 6, -1], [c + 7, -2], [c + 8, 4]]) set(g, x, top + y, '#c8ff8a');
     }
   },
-  magma: (g, { c, top, glow }) => {
+  frost: (g, { c, top, glow = 0, tier = 1 }) => {
+    const tip = glow || tier >= 3 ? WHITE : '#dff8ff';
+    const spikes = tier === 1 ? [[c - 3, 2], [c, 3], [c + 1, 3], [c + 4, 2]]
+      : [[c - 4, 2], [c - 2, 3], [c, 4], [c + 1, 4], [c + 3, 3], [c + 5, 2]];
+    for (const [x, h0] of spikes) {
+      const h = h0 + glow + (tier >= 3 ? 1 : 0);
+      for (let i = 1; i <= h; i++) set(g, x, top + 1 - i, i === h ? tip : '#8ad8f8');
+    }
+    if (tier >= 2) sparkle(g, c + 7, top - 1, '#dff8ff'); // 눈꽃
+    if (tier >= 3) { gem(g, c - 6, top + 1, '#bff0ff'); gem(g, c + 8, top + 4, '#bff0ff'); set(g, c - 5, top - 4, WHITE); }
+  },
+  magma: (g, { c, top, glow = 0, tier = 1 }) => {
     const hot = glow ? '#fff07a' : '#ffd84a';
     for (const [x, y] of [[c - 3, 3], [c - 2, 4], [c + 3, 2], [c + 2, 3], [c + 2, 4]]) set(g, x, top + y, hot);
-    if (glow) for (const [x, y] of [[c, -1], [c + 1, -2], [c - 2, -1], [c + 3, -1]]) set(g, x, top + y, y === -2 ? '#ffd84a' : '#ff8a2a');
+    const h = tier >= 3 ? 4 : tier === 2 ? 2 : 0;
+    if (h || glow) flame(g, c, top, (h || 1) + glow);
+    if (tier >= 3) {
+      for (const [x, y] of [[c - 4, 6], [c - 3, 7], [c + 4, 7], [c + 5, 6]]) set(g, x, top + y, '#5a2a1a'); // 굳은 바위 껍질
+      for (const [x, y, col] of [[c - 6, -2, '#ffb84a'], [c + 7, -1, '#ff8a2a'], [c + 8, -4, '#ffd84a']]) set(g, x, top + y, col); // 불티
+    }
   },
-  shade: (g, { c, top, glow }) => {
-    set(g, c, top - 1, '#3a2060'); set(g, c + 1, top - 2, '#3a2060'); set(g, c + 1, top - 3, '#5a3a90'); set(g, c, top - 4, '#5a3a90');
-    if (glow) { set(g, c - 5, top + 2, '#b07ad0'); set(g, c + 6, top + 3, '#b07ad0'); set(g, c - 4, top, '#7a4ab8'); }
+  shade: (g, { c, top, glow = 0, tier = 1 }) => {
+    const wisp = tier >= 3 ? [[c, -1], [c + 1, -2], [c + 2, -3], [c + 1, -4], [c, -5]] : [[c, -1], [c + 1, -2], [c + 1, -3], [c, -4]];
+    wisp.forEach(([x, y], i) => set(g, x, top + y, i < 2 ? '#3a2060' : '#5a3a90'));
+    if (tier >= 2) for (const x of [c - 3, c + 4]) { // 뿔
+      set(g, x, top, '#2a1a40'); set(g, x, top - 1, '#2a1a40'); set(g, x + (x < c ? -1 : 1), top - 2, '#8a6ab0');
+    }
+    if (tier >= 3 || glow) { set(g, c - 5, top + 2, '#b07ad0'); set(g, c + 6, top + 3, '#b07ad0'); set(g, c - 4, top + 1, '#7a4ab8'); }
+    if (tier >= 3) for (const [x, y] of [[c - 7, -2], [c + 8, -1], [c + 7, 6]]) set(g, x, top + y, '#d8a8ff');
   },
-  prism: (g, { c, top }) => { // 왕관: 몸 꼭대기에 걸쳐 앉는다
+  prism: (g, { c, top }) => { // 왕관: 몸 꼭대기에 걸쳐 앉는다 (32×32에 바로 그린다)
     const x = c - 6, y = top - 4;
     rect(g, x, y + 3, 14, 3, OUT);
     for (const ox of [0, 6, 12]) { rect(g, x + ox, y - 1, 2, 4, OUT); rect(g, x + ox, y, 2, 4, '#ffd84a'); }
@@ -232,12 +269,71 @@ const deco = {
   },
 };
 
+// ── 4단계: 사람의 형태를 띤 슬라임 ──────────────────────
+const HUMAN_ROWS = [
+  '................',
+  '................',
+  '.....oooooo.....',
+  '....olsbbbbo....',
+  '...ollllbbbbo...',
+  '...olbbbbbbdo...',
+  '...olbbbbbbdo...',
+  '...olbbbbbbdo...',
+  '....obbbbbdo....',
+  '.....oobboo.....',
+  '..oolbbbbbbdoo..',
+  '.olbobbbbbbodbo.',
+  '.oddoblbbbdoddo.',
+  '..oo.obbbbdo.oo.',
+  '....obo..obo....',
+  '...oddo..oddo...',
+];
+
+// 머리 모양: 영웅마다 다르다. c = 머리 가운데 두 칸 중 왼쪽, top = 머리 꼭대기 줄
+const hair = {
+  sprout: (g, { c, top }) => { // 잎사귀 머리와 꽃 핀
+    rect(g, c - 2, top - 2, 6, 1, OUT);
+    rect(g, c - 2, top - 1, 6, 1, '#5ab82a');
+    rect(g, c - 3, top, 8, 1, '#3a8a2a');
+    for (const x of [c - 4, c + 5]) { set(g, x, top + 1, '#3a8a2a'); set(g, x, top + 2, '#3a8a2a'); }
+    set(g, c + 1, top - 3, '#3a7a1a'); rect(g, c + 2, top - 3, 2, 1, '#8ae04a');
+    set(g, c + 4, top, '#ff8ab8'); set(g, c + 4, top - 1, '#ffc8e0');
+  },
+  frost: (g, { c, top }) => { // 얼음 가시 머리와 어깨 수정
+    for (let x = c - 3; x <= c + 4; x++) set(g, x, top, '#8ad8f8');
+    for (const [x, h] of [[c - 3, 2], [c - 1, 3], [c, 4], [c + 1, 4], [c + 2, 3], [c + 4, 2]]) {
+      for (let i = 1; i <= h; i++) set(g, x, top + 1 - i, i === h ? WHITE : '#8ad8f8');
+    }
+    gem(g, 13, 10, '#bff0ff');
+  },
+  magma: (g, { c, top }) => { // 불꽃 머리와 바위 팔
+    for (let x = c - 3; x <= c + 4; x++) set(g, x, top, '#ff8a2a');
+    flame(g, c, top, 4);
+    set(g, c - 3, top - 1, '#ffd84a'); set(g, c + 4, top - 1, '#ffd84a');
+    for (const [x, y] of [[2, 11], [13, 11], [3, 12]]) set(g, x, y, '#5a2a1a');
+  },
+  shade: (g, { c, top }) => { // 두건, 뿔, 연기
+    rect(g, c - 3, top - 1, 8, 1, OUT);
+    rect(g, c - 3, top, 8, 1, '#2a1450');
+    for (let y = top + 1; y <= top + 5; y++) { set(g, c - 4, y, '#2a1450'); set(g, c + 5, y, '#2a1450'); }
+    for (const [x, d] of [[c - 3, -1], [c + 4, 1]]) { set(g, x, top - 2, '#2a1a40'); set(g, x + d, top - 3, '#8a6ab0'); }
+    set(g, c + 1, top - 2, '#5a3a90'); set(g, c + 2, top - 3, '#5a3a90');
+  },
+};
+
+function human16(pal, hairFn, { bob = 0, eyes = 'normal', mouth = 'smile', hit = false } = {}) {
+  const g = shift(fromRows(HUMAN_ROWS, { o: OUT, l: pal.light, b: pal.base, d: pal.dark, s: pal.shine }), 0, bob);
+  face(g, pal, { eyes: [[5, 6 + bob], [9, 6 + bob]], blush: [[5, 8 + bob], [10, 8 + bob]], mouth: [7, 8 + bob] }, { eyes, mouth });
+  hairFn(g, { c: 7, top: 2 + bob });
+  return hit ? flash(g) : g;
+}
+
 const PAL = {
   sprout: { base: '#5ac83a', light: '#9af05a', dark: '#2e8a2a', shine: '#e8ffd0', blush: '#ff8aa0', deco: deco.sprout },
-  frost: { base: '#4ab8f0', light: '#9ae0ff', dark: '#2a6ac0', shine: WHITE, blush: '#ff9ab8', deco: deco.frost },
+  frost: { base: '#4ab8f0', light: '#9ae0ff', dark: '#2a6ac0', shine: WHITE, blush: '#ff9ab8', deco: deco.frost, facets: true },
   magma: { base: '#f07a2a', light: '#ffb84a', dark: '#b03a1a', shine: '#fff0b0', eye: '#4a1008', eyeShine: '#ffd84a', deco: deco.magma },
   shade: { base: '#4a2a80', light: '#7a4ab8', dark: '#2a1450', shine: '#c8a8ff', eye: '#ff3a4a', eyeShine: '#ffd0d0', deco: deco.shade },
-  prism: { base: '#d0c8ee', light: '#f0ecff', dark: '#9484c8', shine: WHITE, blush: '#ffa8c8', deco: deco.prism },
+  prism: { base: '#d0c8ee', light: '#f0ecff', dark: '#9484c8', shine: WHITE, blush: '#ffa8c8', deco: deco.prism, bigDeco: true },
 };
 
 // 슬라임 한 마리의 애니메이션 세트. at은 몸을 놓을 자리 (이펙트가 둘레로 퍼지는 슬라임만 가운데로 옮긴다)
@@ -301,6 +397,50 @@ export const BOSS = {
     [{ g: shards(20), x: 0, y: 0 }, ...body({})],
   ], { big: true, at: [8, 8] }),
 };
+
+// ── 성장 단계: 누적 처치 점수에 따라 1 → 4단계 ──────────
+export const STAGE_NAMES = {
+  sprout: ['새싹 슬라임', '꽃망울 슬라임', '만개 슬라임', '숲의 아이'],
+  frost: ['서리 슬라임', '눈꽃 슬라임', '빙관 슬라임', '겨울의 아이'],
+  magma: ['용암 슬라임', '불꽃 슬라임', '화산 슬라임', '불의 아이'],
+  shade: ['그림자 슬라임', '뿔 그림자 슬라임', '밤의 군주 슬라임', '밤의 아이'],
+};
+export const GROWTH = Object.entries(STAGE_NAMES).map(([key, names]) => ({
+  key, name: names[0], role: '성장 단계', attack: names.join(' → '),
+  anims: Object.fromEntries(names.map((name, i) => {
+    const one = g => [{ g, x: 0, y: 0 }];
+    const frames = i < 3
+      ? [one(slime16(PAL[key], { tier: i + 1 })), one(slime16(PAL[key], { tier: i + 1, sx: 1.07, sy: 0.92 }))]
+      : [one(human16(PAL[key], hair[key])), one(human16(PAL[key], hair[key], { bob: -1 }))];
+    return [`${i + 1}단계 ${name}`, { fps: 3, frames }];
+  })),
+}));
+
+// ── 영웅 슬라임 보스 (조건을 채우면 10분에 등장) ─────────
+const bossOf = (key, name, attackText, attack) => ({
+  key, name: `${name} (보스)`, role: '조건 보스 · 이기면 영웅', attack: attackText,
+  anims: slimeSet(key, attack, { big: true, at: [8, 8] }),
+});
+export const HERO_BOSSES = [
+  bossOf('frost', '서리 슬라임', '얼음 폭발: 크게 눌렸다가 얼음 조각을 여덟 방향으로 쏜다', body => [
+    body({ bw: 30, bh: 15, eyes: 'angry' }),
+    body({ bw: 22, bh: 23, lift: 4, eyes: 'angry', mouth: 'open' }),
+    [{ g: shards(12), x: 0, y: 0 }, ...body({ eyes: 'angry', mouth: 'open' })],
+    [{ g: shards(20), x: 0, y: 0 }, ...body({})],
+  ]),
+  bossOf('magma', '용암 슬라임', '대분화: 몸이 부풀었다가 큰 불길 고리를 두 번 퍼뜨린다', body => [
+    body({ bw: 30, bh: 22, eyes: 'angry' }),
+    [{ g: fireRing(10, 0), x: 4, y: 10 }, ...body({ bw: 28, bh: 17, eyes: 'angry', mouth: 'open' })],
+    [{ g: fireRing(15, 1), x: 4, y: 10 }, ...body({ eyes: 'angry', mouth: 'open' })],
+    [{ g: fireRing(19, 2), x: 4, y: 10 }, ...body({})],
+  ]),
+  bossOf('shade', '그림자 슬라임', '그림자 삼키기: 크게 입을 벌리고 앞을 두 번 물어뜯는다', body => [
+    body({ bw: 28, bh: 18, eyes: 'angry' }),
+    [...body({ bw: 30, bh: 18, eyes: 'angry', mouth: 'teeth' }), { g: shadowBite(0), x: 32, y: 14 }],
+    [...body({ bw: 30, bh: 18, eyes: 'angry', mouth: 'teeth' }), { g: shadowBite(1), x: 32, y: 14 }],
+    [...body({ eyes: 'angry' }), { g: shadowBite(2), x: 32, y: 14 }],
+  ]),
+];
 
 // ── 적: 슬라임을 사냥하러 온 숲의 무리 ─────────────────
 const EP = {
@@ -515,22 +655,49 @@ export function bake(g) {
   return c;
 }
 // 게임용 묶음: 애니메이션마다 프레임 캔버스, fps, 기준점(ax, ay = 몸 가운데).
-// 처음 부를 때 한 번만 굽는다. 영웅은 몸 레이어만 쓴다 (탄은 게임이 따로 날린다)
-let art = null;
-export function gameArt() {
-  if (art) return art;
-  const flatten = (anim, onlyBody, ax, ay) => {
-    const frames = anim.frames.map(f => (onlyBody ? f.slice(0, 1) : f));
-    let w = 0, h = 0;
-    for (const f of frames) for (const l of f) { w = Math.max(w, l.x + l.g.w); h = Math.max(h, l.y + l.g.h); }
-    return { fps: anim.fps, ax, ay, frames: frames.map(f => bake(f.reduce((g, l) => paste(g, l.g, l.x, l.y), grid(w, h)))) };
+// 영웅·단계마다 처음 부를 때 한 번만 굽는다. 영웅은 몸만 쓴다 (탄과 고리는 게임이 따로 그린다)
+function heroAnims(key, tier) {
+  const pal = PAL[key], one = g => [{ g, x: 0, y: 0 }];
+  const eyes = key === 'shade' ? 'angry' : 'normal', glow = key === 'sprout' ? 0 : 1;
+  const draw = tier < 4 ? o => one(slime16(pal, { tier, ...o })) : o => one(human16(pal, hair[key], o));
+  const rest = tier < 4 ? { sx: 1.07, sy: 0.92 } : { bob: -1 };
+  const squash = tier < 4 ? { sx: 1.14, sy: 0.8 } : { bob: -1 };
+  const stretch = tier < 4 ? { sx: 0.9, sy: 1.12 } : {};
+  const hurt = tier < 4 ? { sx: 1.1, sy: 0.82 } : {};
+  return {
+    idle: { fps: tier < 4 ? 4 : 3, frames: [draw({}), draw(rest)] },
+    attack: { fps: 8, frames: [draw({ ...squash, eyes, glow }), draw({ ...stretch, mouth: 'open', eyes, glow }), draw({ mouth: 'open', eyes }), draw({})] },
+    hit: { fps: 8, frames: [draw({ ...hurt, hit: true, eyes: 'squint', mouth: 'open' }), draw({ ...hurt, eyes: 'squint', mouth: 'open' }), draw({})] },
+    death: { fps: 6, frames: meltFrames(pal, false) },
   };
-  const hero = HEROES[0];
-  art = {
-    hero: Object.fromEntries(Object.entries(hero.anims).map(([k, a]) => [k, flatten(a, true, 8, 10)])),
-    mobs: Object.fromEntries(ENEMIES.map(e => [e.key, Object.fromEntries(Object.entries(e.anims)
-      .map(([k, a]) => [k, flatten(a, false, e.body[0] + 8, e.body[1] + 8)]))])),
-    goo: [0, 1].map(i => bake(gooBall(PAL.sprout, i))),
+}
+
+function flatten(anim, onlyBody, ax, ay) {
+  const frames = anim.frames.map(f => (onlyBody ? f.slice(0, 1) : f));
+  let w = 0, h = 0;
+  for (const f of frames) for (const l of f) { w = Math.max(w, l.x + l.g.w); h = Math.max(h, l.y + l.g.h); }
+  return { fps: anim.fps, ax, ay, frames: frames.map(f => bake(f.reduce((g, l) => paste(g, l.g, l.x, l.y), grid(w, h)))) };
+}
+const mapAnims = (anims, fn) => Object.fromEntries(Object.entries(anims).map(([k, a]) => [k, fn(a)]));
+
+const artCache = new Map();
+let sharedArt = null;
+export function gameArt(hero = 'sprout', tier = 1) {
+  const key = `${hero}:${tier}`;
+  if (artCache.has(key)) return artCache.get(key);
+  // 적과 보스는 영웅과 상관없이 한 번만 굽는다. 보스 몸(32×32)은 (8, 8)에 놓여 있다
+  sharedArt ??= {
+    mobs: Object.fromEntries(ENEMIES.map(e => [e.key, mapAnims(e.anims, a => flatten(a, false, e.body[0] + 8, e.body[1] + 8))])),
+    bosses: Object.fromEntries([BOSS, ...HERO_BOSSES].map(b => {
+      const { idle, ...rest } = mapAnims(b.anims, a => flatten(a, false, 24, 29));
+      return [b.key, { walk: idle, ...rest }];
+    })),
   };
+  const art = {
+    ...sharedArt,
+    hero: mapAnims(heroAnims(hero, tier), a => flatten(a, true, 8, 10)),
+    bolt: hero === 'frost' ? [bake(icicle(12))] : [0, 1].map(i => bake(gooBall(PAL.sprout, i))),
+  };
+  artCache.set(key, art);
   return art;
 }

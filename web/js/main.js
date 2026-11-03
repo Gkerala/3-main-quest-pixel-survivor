@@ -1,13 +1,22 @@
 // 화면 4개(시작 → 대기 → 게임 → 결과) 전환과 버튼 연결
 import { api, token } from './api.js';
 import { startGame } from './game.js';
-import { MOBS, todayKST } from './rules.js';
+import { MOBS, HEROES, BOSSES, GROWTH, tierOf, todayKST } from './rules.js';
 import { GOOGLE_CLIENT_ID } from './config.js';
 import { startBackdrop } from './backdrop.js';
+import { gameArt, STAGE_NAMES } from './slime-art.js';
 
 const $ = id => document.getElementById(id);
 const STATUS = { guest: '게스트', web: '웹 회원', google: '구글 회원', both: '웹 + 구글' };
 let user = null;
+// 고른 영웅은 이 브라우저에 기억한다 (얻지 않은 영웅이면 새싹으로 돌아간다)
+let hero = 'sprout';
+try { hero = localStorage.getItem('ps-hero') || 'sprout'; } catch { /* 저장소를 못 쓰면 매번 새싹 */ }
+const HINTS = {
+  frost: '관통 강화 3번 받고 10분 보스를 이기면',
+  magma: '10분 안에 1,500마리 잡고 보스를 이기면',
+  shade: '체력 20% 아래에서 버티고 보스를 이기면',
+};
 const backdrop = startBackdrop($('backdrop'));
 
 function show(name) {
@@ -43,7 +52,80 @@ function enterLobby(u) {
   $('btn-save-guest').hidden = u.status !== 'guest';
   $('google-link').hidden = u.status !== 'web';
   $('guest-note').hidden = true;
+  renderHeroes();
   show('lobby');
+}
+
+const owned = h => h === 'sprout' || !!user.progress?.heroes?.includes(h);
+const scoreFor = h => user.progress?.scores?.[h] ?? 0;
+
+// 애니메이션 첫 프레임을 기준점이 가운데 오게 작은 캔버스에 옮긴다. dark면 실루엣
+function sprite(anim, size, dark) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const x = c.getContext('2d');
+  if (dark) x.filter = 'brightness(0) opacity(.55)';
+  x.drawImage(anim.frames[0], size / 2 - anim.ax, size / 2 + 2 - anim.ay);
+  return c;
+}
+
+function renderHeroes() {
+  if (!owned(hero)) hero = 'sprout';
+  $('hero-list').replaceChildren(...HEROES.map(h => {
+    const own = owned(h), total = scoreFor(h), tier = tierOf(total);
+    const b = document.createElement('button');
+    b.className = 'hero';
+    b.setAttribute('role', 'radio');
+    b.setAttribute('aria-checked', String(h === hero));
+    b.disabled = !own;
+    const name = document.createElement('strong');
+    const info = document.createElement('small');
+    name.textContent = own ? STAGE_NAMES[h][tier - 1] : '???';
+    info.textContent = !own ? HINTS[h] : tier < 4 ? `${tier}단계 · 다음 단계까지 ${(GROWTH[tier] - total).toLocaleString()}점` : '4단계 · 사람의 형태';
+    b.append(sprite(gameArt(h, own ? tier : 1).hero.idle, 16, !own), name, info);
+    if (own && tier < 4) { // 다음 단계까지 얼마나 왔나
+      const bar = document.createElement('span'), fill = document.createElement('i');
+      bar.className = 'grow';
+      fill.style.width = `${((total - GROWTH[tier - 1]) / (GROWTH[tier] - GROWTH[tier - 1])) * 100}%`;
+      bar.append(fill);
+      b.append(bar);
+    }
+    b.onclick = () => {
+      hero = h;
+      try { localStorage.setItem('ps-hero', h); } catch { /* 이번 접속에서만 기억 */ }
+      renderHeroes();
+    };
+    return b;
+  }));
+}
+
+// 도감: 처치한 적과 이긴 보스만 모습이 보인다
+function renderDex() {
+  const dex = user.progress?.dex ?? {}, art = gameArt();
+  const items = [
+    ...Object.keys(MOBS).map(k => ({ name: MOBS[k].name, anim: art.mobs[k].walk, n: dex.kills?.[k] ?? 0, unit: '마리 처치', size: 16 })),
+    ...Object.keys(BOSSES).map(k => ({ name: BOSSES[k].name, anim: art.bosses[k].walk, n: dex.bosses?.[k] ?? 0, unit: '번 이김', size: 40 })),
+  ];
+  $('dex-list').replaceChildren(...items.map(it => {
+    const d = document.createElement('div'), name = document.createElement('strong'), count = document.createElement('small');
+    d.className = 'dex-item';
+    name.textContent = it.n ? it.name : '???';
+    count.textContent = `${it.n.toLocaleString()}${it.unit}`;
+    d.append(sprite(it.anim, it.size, !it.n), name, count);
+    return d;
+  }));
+}
+$('btn-dex').onclick = () => { renderDex(); $('dex').showModal(); };
+$('dex-close').onclick = () => $('dex').close();
+
+// 결과 화면의 보스 한 줄
+function bossNote(boss, r) {
+  if (!boss || !r.valid) return null;
+  const name = BOSSES[boss.key].name;
+  if (!boss.killed) return `${name}에게 졌습니다. 다음에는 이겨 보세요`;
+  if (r.unlocked) return `${name}이 동료가 되었습니다. 대기 화면에서 고를 수 있어요`;
+  if (!BOSSES[boss.key].hero) return `${name}을 이겨 도감에 등록했습니다`;
+  return `${name}을 또 이겼습니다 (도감 ${r.progress.dex.bosses[boss.key]}번)`;
 }
 
 async function run(fn) {
@@ -80,8 +162,9 @@ $('btn-play').onclick = play;
 // 게임 → 결과
 async function play() {
   show('game');
-  const hud = { time: $('hud-time'), score: $('hud-score'), level: $('hud-level'), hp: $('hud-hp'), threat: $('hud-threat') };
-  const record = await startGame($('game-canvas'), hud, todayKST(), { choose });
+  const hud = { time: $('hud-time'), score: $('hud-score'), level: $('hud-level'), hp: $('hud-hp'), threat: $('hud-threat'),
+    boss: $('hud-boss'), bossName: $('hud-boss-name'), bossHp: $('hud-boss-hp') };
+  const record = await startGame($('game-canvas'), hud, todayKST(), { choose, hero, tier: tierOf(scoreFor(hero)) });
   show('result');
   $('result-time').textContent = `${Math.floor(record.time / 60)}분 ${Math.floor(record.time % 60)}초`;
   $('result-kills').textContent = Object.entries(record.kills)
@@ -89,11 +172,15 @@ async function play() {
   $('result-score').textContent = '…';
   $('result-best').textContent = '…';
   $('result-new').hidden = true;
+  $('result-boss').hidden = true;
   try {
     const r = await api.submit(record);
     $('result-score').textContent = r.score;
     $('result-best').textContent = r.best;
     $('result-new').hidden = !(r.valid && r.score > 0 && r.score >= r.best);
+    if (r.progress) user = { ...user, progress: r.progress };
+    const note = bossNote(record.boss, r);
+    if (note) { $('result-boss').textContent = note; $('result-boss').hidden = false; }
     if (!r.valid) toast(`확인되지 않은 기록이라 최고 점수에서 뺐습니다 (${r.reason})`);
   } catch (e) {
     $('result-score').textContent = '-';

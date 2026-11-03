@@ -30,7 +30,7 @@
   <div id="root"></div>
 </main>
 <script type="module">
-  import { HEROES, BOSS, ENEMIES, bake } from './js/slime-art.js';
+  import { HEROES, BOSS, HERO_BOSSES, GROWTH, ENEMIES, bake } from './js/slime-art.js';
 
   const SCALE = Number(new URLSearchParams(location.search).get('x')) || 6, players = [];
   const root = document.getElementById('root');
@@ -65,7 +65,7 @@
         const sx = strip.getContext('2d');
         frames.forEach((f, i) => f.forEach(l => sx.drawImage(l.c, i * w + l.x, l.y)));
         const cap = document.createElement('figcaption');
-        cap.textContent = `${LABEL[name]} · ${frames.length}프레임`;
+        cap.textContent = `${LABEL[name] ?? name} · ${frames.length}프레임`;
         fig.append(cv, cap, strip);
         box.querySelector('.anims').append(fig);
         // 쓰러짐·피격은 끝 프레임에서 잠깐 멈췄다가 다시 보여 준다
@@ -76,8 +76,10 @@
     }
   }
 
+  section('성장 단계 (누적 처치 점수로 자란다)', GROWTH);
   section('영웅 슬라임 (공격 방식마다 하나)', HEROES);
-  section('보스', [BOSS]);
+  section('조건 보스 (이기면 영웅이 된다)', HERO_BOSSES);
+  section('일반 보스 (이기면 도감에만)', [BOSS]);
   section('적', ENEMIES);
 
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches;

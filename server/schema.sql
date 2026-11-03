@@ -23,6 +23,12 @@ create table if not exists records (
 
 create index if not exists records_user_valid on records (user_id) where valid;
 
+-- 다음 버전(SETTING.md): 영웅·보스·성장. 이미 있는 표에도 칸만 더한다
+alter table users add column if not exists progress jsonb not null default '{}'; -- {heroes, scores, dex}
+alter table records add column if not exists hero text not null default 'sprout';
+alter table records add column if not exists boss text;                          -- 나온 보스 (없으면 null)
+alter table records add column if not exists boss_killed boolean not null default false;
+
 -- Supabase는 공개 키로 표를 바로 읽는 길(REST)을 열어 둔다. 정책 없이 RLS만 켜서 그 길을 막는다.
 -- 이 서버는 DB 주인 계정으로 접속하므로 영향이 없다
 alter table users enable row level security;

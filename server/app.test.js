@@ -106,3 +106,44 @@ test('비밀번호 해시는 응답에 나오지 않는다', async () => {
   const r = await call('/signup', { body: { username: 'no_leak', password: 'secret12' } });
   assert.equal(JSON.stringify(r).includes('passwordHash'), false);
 });
+
+// 10분 넘게 버티고 1,500마리 넘게 잡은 기록 (용암 슬라임 보스 조건)
+const bossRecord = (boss, extra = {}) => ({ time: 640, kills: { slime: 700, bat: 600, knight: 200 }, boss, ...extra });
+
+test('조건 보스를 이기면 그 영웅을 얻고, 얻은 뒤에야 그 영웅으로 기록이 인정된다', async () => {
+  const { token } = await call('/guest', { body: {} });
+  const early = await call('/records', { token, body: { ...goodRecord, hero: 'magma' } });
+  assert.deepEqual([early.valid, early.reason], [false, '아직 얻지 않은 영웅: magma']);
+  const won = await call('/records', { token, body: bossRecord({ key: 'magma', killed: true }) });
+  assert.deepEqual([won.valid, won.unlocked, won.progress.heroes], [true, 'magma', ['magma']]);
+  assert.equal(won.score, 700 + 600 * 3 + 200 * 10 + 500); // 보스 점수 500
+  const later = await call('/records', { token, body: { ...goodRecord, hero: 'magma' } });
+  assert.deepEqual([later.valid, later.progress.scores.magma], [true, 26]);
+  assert.deepEqual((await call('/me', { token })).user.progress.heroes, ['magma']);
+});
+
+test('일반 보스(프리즘 킹)는 이겨도 영웅이 안 되고 도감에만 남는다', async () => {
+  const { token } = await call('/guest', { body: {} });
+  const r = await call('/records', { token, body: bossRecord({ key: 'prism', killed: true }) });
+  assert.deepEqual([r.valid, r.unlocked, r.progress.heroes, r.progress.dex.bosses.prism], [true, null, [], 1]);
+  assert.equal(r.progress.dex.kills.knight, 200);
+});
+
+test('보스 기록 검사: 10분 전 보스, 조건을 안 채운 조건 보스, 10분을 넘겼는데 보스 없음은 버그', async () => {
+  const { token } = await call('/guest', { body: {} });
+  const tooEarly = await call('/records', { token, body: { ...goodRecord, boss: { key: 'prism', killed: true } } });
+  assert.equal(tooEarly.valid, false);
+  const noCondition = await call('/records', { token, body: bossRecord({ key: 'frost', killed: true }, { pierce: 1 }) });
+  assert.deepEqual([noCondition.valid, noCondition.reason], [false, '보스 조건을 채우지 않음: 서리 슬라임']);
+  const missing = await call('/records', { token, body: bossRecord(null) });
+  assert.equal(missing.valid, false);
+  const frost = await call('/records', { token, body: bossRecord({ key: 'frost', killed: false }, { pierce: 3 }) });
+  assert.deepEqual([frost.valid, frost.unlocked], [true, null]); // 지면 영웅을 얻지 못한다
+});
+
+test('영웅별 점수는 따로 쌓인다', async () => {
+  const { token } = await call('/guest', { body: {} });
+  await call('/records', { token, body: goodRecord });
+  const r = await call('/records', { token, body: goodRecord });
+  assert.deepEqual(r.progress.scores, { sprout: 52 });
+});

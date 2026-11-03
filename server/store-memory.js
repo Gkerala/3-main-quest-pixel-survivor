@@ -7,7 +7,7 @@ export function createMemoryStore() {
 
   return {
     async createUser(fields) {
-      const user = { id: nextId++, username: null, passwordHash: null, googleSub: null, createdAt: new Date().toISOString(), ...fields };
+      const user = { id: nextId++, username: null, passwordHash: null, googleSub: null, progress: {}, createdAt: new Date().toISOString(), ...fields };
       users.set(user.id, user);
       return copy(user);
     },
