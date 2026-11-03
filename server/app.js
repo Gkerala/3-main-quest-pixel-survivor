@@ -25,6 +25,7 @@ const publicUser = u => ({
 export function createApp({ store, jwtSecret, verifyGoogle, corsOrigins }) {
   if (!jwtSecret) throw new Error('JWT_SECRET이 필요합니다');
   const app = express();
+  app.set('trust proxy', 1); // Render 프록시 한 겹 뒤의 실제 IP로 요청 횟수를 센다
   app.use(cors({ origin: corsOrigins }));
   app.use(express.json({ limit: '10kb' }));
   app.use('/api', rateLimit({ windowMs: 60_000, limit: 60 }));

@@ -1,0 +1,22 @@
+# Render 블루프린트: API 서버. Render 대시보드 → New → Blueprint → 이 저장소를 고르면 아래대로 만든다.
+# 서버가 ../web/js/rules.js를 같이 쓰므로 Root Directory를 두지 않고 cd server로 실행한다
+services:
+  - type: web
+    name: pixel-survivor-api
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: cd server && npm ci
+    startCommand: cd server && npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: JWT_SECRET
+        generateValue: true # Render가 무작위 값을 만든다
+      - key: DATABASE_URL
+        sync: false # 대시보드에서 직접 입력 (비밀값)
+      - key: GOOGLE_CLIENT_ID
+        value: 450918458558-vmvbfohuhqchm92j5ok9mr9afi0h9pid.apps.googleusercontent.com
+      - key: CORS_ORIGIN
+        value: https://gkerala.github.io
