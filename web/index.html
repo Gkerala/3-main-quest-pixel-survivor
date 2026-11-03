@@ -14,6 +14,7 @@
   <section id="screen-start" class="screen">
     <h1 class="logo">PIXEL<br>SURVIVOR</h1>
     <p class="tagline">하루 한 번, 10분, 모두 같은 조건에서</p>
+    <p id="guest-note" class="note" hidden>가입하거나 구글을 연동하면 지금까지의 게스트 기록이 회원 계정으로 저장됩니다.</p>
     <div class="panel">
       <button id="btn-guest" class="btn primary">게스트로 바로 시작</button>
       <div class="divider"><span>또는</span></div>
@@ -33,7 +34,10 @@
   <section id="screen-lobby" class="screen" hidden>
     <header class="profile">
       <div><strong id="profile-name"></strong><span id="profile-status" class="badge"></span></div>
-      <button id="btn-logout" class="btn small ghost">로그아웃</button>
+      <div class="row">
+        <button id="btn-save-guest" class="btn small" hidden>회원으로 저장</button>
+        <button id="btn-logout" class="btn small ghost">로그아웃</button>
+      </div>
     </header>
     <p id="lobby-date" class="tagline"></p>
     <button id="btn-play" class="btn primary big">게임 시작</button>

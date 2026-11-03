@@ -1,5 +1,5 @@
 // 화면 4개(시작 → 대기 → 게임 → 결과) 전환과 버튼 연결
-import { api } from './api.js';
+import { api, token } from './api.js';
 import { startGame } from './game.js';
 import { MOBS, todayKST } from './rules.js';
 
@@ -24,6 +24,8 @@ function enterLobby(u) {
   $('profile-name').textContent = u.name;
   $('profile-status').textContent = STATUS[u.status];
   $('lobby-date').textContent = `오늘의 패턴 ${todayKST()}`;
+  $('btn-save-guest').hidden = u.status !== 'guest';
+  $('guest-note').hidden = true;
   show('lobby');
 }
 
@@ -44,7 +46,9 @@ $('btn-google').onclick = () => toast('구글 로그인은 다음 단계에서 �
 
 // 대기 화면: 랭킹·프로필·상점·환경설정·도감은 버튼만 (PRD Won't)
 for (const b of document.querySelectorAll('[data-soon]')) b.onclick = () => toast(`${b.textContent}: 다음 버전에서 열립니다`);
-$('btn-logout').onclick = () => { user = null; show('start'); };
+$('btn-logout').onclick = () => { user = null; token.set(null); show('start'); };
+// 게스트 토큰을 지우지 않고 시작 화면으로. 여기서 가입하거나 구글을 연동하면 지금 계정이 회원이 된다
+$('btn-save-guest').onclick = () => { $('guest-note').hidden = false; show('start'); };
 $('btn-play').onclick = play;
 
 // 게임 → 결과
@@ -59,9 +63,10 @@ async function play() {
   $('result-score').textContent = '…';
   $('result-best').textContent = '…';
   try {
-    const r = await api.submit(user, record);
+    const r = await api.submit(record);
     $('result-score').textContent = r.score;
     $('result-best').textContent = r.best;
+    if (!r.valid) toast(`확인되지 않은 기록이라 최고 점수에서 뺐습니다 (${r.reason})`);
   } catch (e) {
     $('result-score').textContent = '-';
     toast(`기록 저장 실패: ${e.message}`);
@@ -70,4 +75,6 @@ async function play() {
 $('btn-again').onclick = play;
 $('btn-lobby').onclick = () => enterLobby(user);
 
-show('start');
+// 이전에 로그인했으면 바로 대기 화면으로
+if (token.get()) api.me().then(r => enterLobby(r.user), () => show('start'));
+else show('start');

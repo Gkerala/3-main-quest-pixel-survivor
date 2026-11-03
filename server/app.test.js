@@ -1,0 +1,108 @@
+// 실행: npm test. 메모리 저장소와 가짜 구글 확인으로 실제 HTTP 요청을 보낸다
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { createApp } from './app.js';
+import { createMemoryStore } from './store-memory.js';
+
+let server, base;
+// 가짜 구글: 'google:<번호>'를 그 번호의 구글 계정으로 본다
+const verifyGoogle = async credential => {
+  if (!credential.startsWith('google:')) throw new Error('bad');
+  return { sub: credential.slice(7), name: '구글유저' };
+};
+
+before(async () => {
+  const app = createApp({ store: createMemoryStore(), jwtSecret: 'test-secret', verifyGoogle, corsOrigins: [] });
+  server = app.listen(0);
+  await new Promise(r => server.once('listening', r));
+  base = `http://localhost:${server.address().port}/api`;
+});
+after(() => server.close());
+
+async function call(path, { token, body, method = body ? 'POST' : 'GET' } = {}) {
+  const res = await fetch(base + path, {
+    method,
+    headers: { 'content-type': 'application/json', ...(token && { authorization: `Bearer ${token}` }) },
+    body: body && JSON.stringify(body),
+  });
+  return { status: res.status, ...(await res.json()) };
+}
+
+const goodRecord = { time: 100, kills: { slime: 20, bat: 2 } }; // 20×1 + 2×3 = 26점
+
+test('게스트는 기록을 남기고 최고 점수를 본다', async () => {
+  const { token, user } = await call('/guest', { body: {} });
+  assert.equal(user.status, 'guest');
+  const r = await call('/records', { token, body: goodRecord });
+  assert.equal(r.status, 201);
+  assert.deepEqual([r.valid, r.score, r.best], [true, 26, 26]);
+  assert.equal((await call('/me', { token })).best, 26);
+});
+
+test('점수는 서버가 다시 계산하고, 불가능한 기록은 버그로 저장되며 최고 점수에 안 들어간다', async () => {
+  const { token } = await call('/guest', { body: {} });
+  const forged = await call('/records', { token, body: { ...goodRecord, score: 999999 } });
+  assert.equal(forged.score, 26);
+  const early = await call('/records', { token, body: { time: 30, kills: { golem: 1 } } }); // 골렘은 420초부터
+  assert.deepEqual([early.status, early.valid, early.best], [201, false, 26]);
+  const tooMany = await call('/records', { token, body: { time: 10, kills: { slime: 500 } } });
+  assert.equal(tooMany.valid, false);
+  const tooLong = await call('/records', { token, body: { time: 99999, kills: {} } });
+  assert.equal(tooLong.valid, false);
+});
+
+test('형식이 틀린 기록과 토큰 없는 기록은 거부한다', async () => {
+  const { token } = await call('/guest', { body: {} });
+  assert.equal((await call('/records', { token, body: { time: '100', kills: {} } })).status, 400);
+  assert.equal((await call('/records', { token, body: { time: 100, kills: { slime: -1 } } })).status, 400);
+  assert.equal((await call('/records', { body: goodRecord })).status, 401);
+  assert.equal((await call('/records', { token: 'forged', body: goodRecord })).status, 401);
+});
+
+test('게스트가 회원가입하면 같은 계정이 회원이 되고 기록이 따라온다', async () => {
+  const guest = await call('/guest', { body: {} });
+  await call('/records', { token: guest.token, body: goodRecord });
+  const web = await call('/signup', { token: guest.token, body: { username: 'upgrade_me', password: 'secret12' } });
+  assert.deepEqual([web.user.id, web.user.status], [guest.user.id, 'web']);
+  const login = await call('/login', { body: { username: 'upgrade_me', password: 'secret12' } });
+  assert.equal((await call('/me', { token: login.token })).best, 26);
+});
+
+test('회원가입·로그인 입력 검사', async () => {
+  await call('/signup', { body: { username: 'dup_user', password: 'secret12' } });
+  assert.equal((await call('/signup', { body: { username: 'dup_user', password: 'secret12' } })).status, 409);
+  assert.equal((await call('/signup', { body: { username: 'a', password: 'secret12' } })).status, 400);
+  assert.equal((await call('/signup', { body: { username: 'short_pw', password: '123' } })).status, 400);
+  assert.equal((await call('/login', { body: { username: 'dup_user', password: 'wrong123' } })).status, 401);
+  assert.equal((await call('/login', { body: { username: 'nobody', password: 'secret12' } })).status, 401);
+});
+
+test('웹 계정에 구글을 연동하면 어느 쪽으로 로그인해도 같은 유저다', async () => {
+  const web = await call('/signup', { body: { username: 'linker', password: 'secret12' } });
+  const linked = await call('/google', { token: web.token, body: { credential: 'google:111' } });
+  assert.deepEqual([linked.user.id, linked.user.status], [web.user.id, 'both']);
+  const viaGoogle = await call('/google', { body: { credential: 'google:111' } });
+  const viaPassword = await call('/login', { body: { username: 'linker', password: 'secret12' } });
+  assert.equal(viaGoogle.user.id, web.user.id);
+  assert.equal(viaPassword.user.id, web.user.id);
+});
+
+test('구글만으로 로그인하면 구글 회원이 되고, 이미 연결된 구글은 다른 계정에 못 붙인다', async () => {
+  const g = await call('/google', { body: { credential: 'google:222' } });
+  assert.equal(g.user.status, 'google');
+  assert.equal((await call('/google', { body: { credential: 'google:222' } })).user.id, g.user.id);
+  const other = await call('/signup', { body: { username: 'other_one', password: 'secret12' } });
+  assert.equal((await call('/google', { token: other.token, body: { credential: 'google:222' } })).status, 409);
+  assert.equal((await call('/google', { body: { credential: 'fake' } })).status, 401);
+});
+
+test('게스트가 구글을 연동하면 구글 회원이 된다', async () => {
+  const guest = await call('/guest', { body: {} });
+  const g = await call('/google', { token: guest.token, body: { credential: 'google:333' } });
+  assert.deepEqual([g.user.id, g.user.status], [guest.user.id, 'google']);
+});
+
+test('비밀번호 해시는 응답에 나오지 않는다', async () => {
+  const r = await call('/signup', { body: { username: 'no_leak', password: 'secret12' } });
+  assert.equal(JSON.stringify(r).includes('passwordHash'), false);
+});
