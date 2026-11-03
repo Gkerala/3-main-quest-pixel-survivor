@@ -22,6 +22,7 @@ function toast(text) {
 
 function enterLobby(u) {
   user = u;
+  $('auth-pw').value = ''; // 로그인하면 비밀번호 칸은 비운다 (아이디는 남긴다)
   $('profile-name').textContent = u.name;
   $('profile-status').textContent = STATUS[u.status];
   $('lobby-date').textContent = `오늘의 패턴 ${todayKST()}`;
