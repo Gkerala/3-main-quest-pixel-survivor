@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pixel-survivor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <!-- 1. 시작/로그인 -->
+  <section id="screen-start" class="screen">
+    <h1 class="logo">PIXEL<br>SURVIVOR</h1>
+    <p class="tagline">하루 한 번, 10분, 모두 같은 조건에서</p>
+    <div class="panel">
+      <button id="btn-guest" class="btn primary">게스트로 바로 시작</button>
+      <div class="divider"><span>또는</span></div>
+      <form id="auth-form">
+        <label>아이디 <input id="auth-id" autocomplete="username" maxlength="20" required></label>
+        <label>비밀번호 <input id="auth-pw" type="password" autocomplete="current-password" minlength="6" required></label>
+        <div class="row">
+          <button class="btn" name="mode" value="login">로그인</button>
+          <button class="btn ghost" name="mode" value="signup">회원가입</button>
+        </div>
+      </form>
+      <button id="btn-google" class="btn google">G&nbsp; 구글로 로그인</button>
+    </div>
+  </section>
+
+  <!-- 2. 대기 -->
+  <section id="screen-lobby" class="screen" hidden>
+    <header class="profile">
+      <div><strong id="profile-name"></strong><span id="profile-status" class="badge"></span></div>
+      <button id="btn-logout" class="btn small ghost">로그아웃</button>
+    </header>
+    <p id="lobby-date" class="tagline"></p>
+    <button id="btn-play" class="btn primary big">게임 시작</button>
+    <nav class="menu">
+      <button class="btn" data-soon>랭킹</button>
+      <button class="btn" data-soon>프로필 설정</button>
+      <button class="btn" data-soon>상점</button>
+      <button class="btn" data-soon>환경설정</button>
+      <button class="btn" data-soon>도감</button>
+    </nav>
+    <p class="hint">WASD 또는 방향키로 움직입니다. 공격은 자동입니다.</p>
+  </section>
+
+  <!-- 3. 게임 -->
+  <section id="screen-game" class="screen" hidden>
+    <div class="stage">
+      <canvas id="game-canvas" width="320" height="180"></canvas>
+      <div class="hud">
+        <div class="hp"><div id="hud-hp"></div></div>
+        <span>⏱ <b id="hud-time">00:00</b></span>
+        <span>점수 <b id="hud-score">0</b></span>
+        <span>Lv <b id="hud-level">1</b></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. 결과 -->
+  <section id="screen-result" class="screen" hidden>
+    <h2 class="logo small">GAME OVER</h2>
+    <div class="panel scores">
+      <div><span>현재 점수</span><b id="result-score"></b></div>
+      <div><span>내 최고 점수</span><b id="result-best"></b></div>
+      <p>생존 <span id="result-time"></span></p>
+      <p>처치 <span id="result-kills"></span></p>
+    </div>
+    <div class="row">
+      <button id="btn-again" class="btn primary">다시 하기</button>
+      <button id="btn-lobby" class="btn">대기 화면</button>
+    </div>
+  </section>
+</main>
+<div id="toast" role="status" hidden></div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
