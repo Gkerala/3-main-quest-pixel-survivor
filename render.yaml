@@ -2,7 +2,7 @@
 # 서버가 ../web/js/rules.js를 같이 쓰므로 Root Directory를 두지 않고 cd server로 실행한다
 services:
   - type: web
-    name: pixel-survivor-api
+    name: three-main-quest-pixel-survivor
     runtime: node
     plan: free
     region: singapore
