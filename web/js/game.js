@@ -10,6 +10,7 @@ const PLAYER = { hp: 100, speed: 110, damage: 20, cooldown: 0.5 };
 const BOLT = { speed: 300, life: 1, spread: 0.2 }; // spread: 탄 여러 발일 때 사이 각도(라디안)
 const LEVEL_XP = 6; // 다음 레벨까지 필요한 경험치 = 레벨 × 6
 const MAX_DT = 0.05; // 탭을 바꿨다 돌아와도 한 번에 크게 건너뛰지 않게
+const STEP = 1 / 60; // 게임 계산은 항상 이 간격으로 쪼갠다. 그래야 화면 프레임 속도와 상관없이 같은 판이 나온다
 
 // 강화는 더하기 위주로. 곱하기로 끝없이 늘리면 몹보다 빨리 강해져 끝나지 않는다
 export const UPGRADES = [
@@ -49,19 +50,24 @@ export function startGame(canvas, hud, seedText, { choose, bot = false, random =
   const mobs = [], bolts = [];
   const kills = Object.fromEntries(Object.keys(MOBS).map(k => [k, 0]));
   let time = 0, killCount = 0, nextSpawn = FIRST_SPAWN, last = performance.now();
-  let pendingLevels = 0, choosing = false;
+  let pendingLevels = 0, choosing = false, acc = 0;
 
   return new Promise(resolve => {
     function frame(now) {
       const dt = Math.min(MAX_DT, (now - last) / 1000);
       last = now;
       if (!choosing) {
-        time += dt;
-        spawn();
-        move(dt);
-        shoot(dt);
-        fly(dt);
-        hurt(dt);
+        acc += dt;
+        // 레벨업이 생기면 그 자리에서 멈춰야 프레임 속도가 달라도 같은 순간에 카드를 고른다
+        while (acc >= STEP && !pendingLevels && p.hp > 0 && time < MAX_TIME) {
+          acc -= STEP;
+          time += STEP;
+          spawn();
+          move(STEP);
+          shoot(STEP);
+          fly(STEP);
+          hurt(STEP);
+        }
       }
       draw(now);
       drawHud();
@@ -167,11 +173,8 @@ export function startGame(canvas, hud, seedText, { choose, bot = false, random =
   function fly(dt) {
     for (let i = bolts.length - 1; i >= 0; i--) {
       const b = bolts[i];
-      // 움직이기 전과 후를 모두 본다. 프레임이 느리면 탄이 바로 옆 몹을 건너뛰기 때문
-      const near = m => !b.hit.has(m) && Math.abs(m.x - b.x) < 10 && Math.abs(m.y - b.y) < 10;
-      let hit = mobs.find(near);
       b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
-      hit ??= mobs.find(near);
+      const hit = mobs.find(m => !b.hit.has(m) && Math.abs(m.x - b.x) < 10 && Math.abs(m.y - b.y) < 10);
       if (hit) {
         hit.hp -= p.damage;
         b.hit.add(hit);
