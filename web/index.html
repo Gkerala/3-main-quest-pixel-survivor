@@ -26,7 +26,7 @@
           <button class="btn ghost" name="mode" value="signup">회원가입</button>
         </div>
       </form>
-      <button id="btn-google" class="btn google">G&nbsp; 구글로 로그인</button>
+      <div id="google-login" class="google-slot"></div>
     </div>
   </section>
 
@@ -39,6 +39,10 @@
         <button id="btn-logout" class="btn small ghost">로그아웃</button>
       </div>
     </header>
+    <div id="google-link" class="google-slot" hidden>
+      <p class="hint">구글을 연동하면 아이디·구글 어느 쪽으로 로그인해도 이 계정으로 들어옵니다.</p>
+      <div id="google-link-btn"></div>
+    </div>
     <p id="lobby-date" class="tagline"></p>
     <button id="btn-play" class="btn primary big">게임 시작</button>
     <nav class="menu">
@@ -80,6 +84,7 @@
   </section>
 </main>
 <div id="toast" role="status" hidden></div>
+<script src="https://accounts.google.com/gsi/client" async></script>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>
