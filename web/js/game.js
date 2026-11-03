@@ -135,7 +135,8 @@ export function startGame(canvas, hud, seedText, { choose, bot = false, random =
   function shoot(dt) {
     p.reload -= dt;
     if (p.reload > 0) return;
-    p.reload = p.cooldown;
+    // 남은 시간을 버리지 않고 이어 붙인다. 버리면 프레임이 느릴수록 공격이 느려진다
+    p.reload = Math.max(p.reload + p.cooldown, 0);
     if (bot) aim = nearestAngle() ?? aim;
     p.facing = Math.cos(aim) < 0 ? -1 : 1;
     for (let i = 0; i < p.shots; i++) {
