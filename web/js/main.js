@@ -3,14 +3,27 @@ import { api, token } from './api.js';
 import { startGame } from './game.js';
 import { MOBS, todayKST } from './rules.js';
 import { GOOGLE_CLIENT_ID } from './config.js';
+import { startBackdrop } from './backdrop.js';
 
 const $ = id => document.getElementById(id);
 const STATUS = { guest: '게스트', web: '웹 회원', google: '구글 회원', both: '웹 + 구글' };
 let user = null;
+const backdrop = startBackdrop($('backdrop'));
 
 function show(name) {
   for (const s of document.querySelectorAll('.screen')) s.hidden = s.id !== `screen-${name}`;
+  document.body.classList.toggle('playing', name === 'game');
+  name === 'game' ? backdrop.pause() : backdrop.resume();
 }
+
+// 새 패턴(한국 시간 자정)까지 남은 시간
+function tickNext() {
+  const left = 86400 - Math.floor((Date.now() / 1000 + 9 * 3600) % 86400);
+  $('lobby-next').textContent = [left / 3600, (left % 3600) / 60, left % 60]
+    .map(n => String(Math.floor(n)).padStart(2, '0')).join(':');
+  if (left === 86400) $('lobby-date').textContent = todayKST().slice(5).replace('-', '.');
+}
+setInterval(tickNext, 1000);
 
 function toast(text) {
   const t = $('toast');
@@ -25,7 +38,8 @@ function enterLobby(u) {
   $('auth-pw').value = ''; // 로그인하면 비밀번호 칸은 비운다 (아이디는 남긴다)
   $('profile-name').textContent = u.name;
   $('profile-status').textContent = STATUS[u.status];
-  $('lobby-date').textContent = `오늘의 패턴 ${todayKST()}`;
+  $('lobby-date').textContent = todayKST().slice(5).replace('-', '.');
+  tickNext();
   $('btn-save-guest').hidden = u.status !== 'guest';
   $('google-link').hidden = u.status !== 'web';
   $('guest-note').hidden = true;
@@ -74,10 +88,12 @@ async function play() {
     .filter(([, n]) => n).map(([k, n]) => `${MOBS[k].name} ${n}`).join(' · ') || '없음';
   $('result-score').textContent = '…';
   $('result-best').textContent = '…';
+  $('result-new').hidden = true;
   try {
     const r = await api.submit(record);
     $('result-score').textContent = r.score;
     $('result-best').textContent = r.best;
+    $('result-new').hidden = !(r.valid && r.score > 0 && r.score >= r.best);
     if (!r.valid) toast(`확인되지 않은 기록이라 최고 점수에서 뺐습니다 (${r.reason})`);
   } catch (e) {
     $('result-score').textContent = '-';

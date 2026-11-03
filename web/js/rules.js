@@ -5,10 +5,10 @@ export const MAX_TIME = 1200; // 초. 설계상 이보다 오래 버틸 수 없�
 
 // from: 등장 위협도. 늦게 나오는 몹일수록 강하고 점수가 높다
 export const MOBS = {
-  slime:  { name: '슬라임', hp: 20,  speed: 45, dmg: 8,  score: 1,  xp: 1,  from: 0 },
-  bat:    { name: '박쥐',   hp: 35,  speed: 85, dmg: 10, score: 3,  xp: 2,  from: 90 },
-  knight: { name: '기사',   hp: 160, speed: 55, dmg: 18, score: 10, xp: 6,  from: 240 },
-  golem:  { name: '골렘',   hp: 700, speed: 65, dmg: 35, score: 30, xp: 20, from: 420 },
+  slime:  { name: '포자버섯', hp: 20,  speed: 45, dmg: 8,  score: 1,  xp: 1,  from: 0 },
+  bat:    { name: '동굴박쥐', hp: 35,  speed: 85, dmg: 10, score: 3,  xp: 2,  from: 90 },
+  knight: { name: '슬라임 사냥꾼', hp: 160, speed: 55, dmg: 18, score: 10, xp: 6,  from: 240 },
+  golem:  { name: '바위 골렘', hp: 700, speed: 65, dmg: 35, score: 30, xp: 20, from: 420 },
 };
 
 // 위협도: 시간이 지나도, 몹을 처치해도 오른다. 빨리 처치할수록 빨리 어려워진다
@@ -83,7 +83,7 @@ export function validateRecord({ time, kills }) {
   const total = Object.values(kills).reduce((a, b) => a + b, 0);
   if (total > times.length) return { ok: false, reason: '나올 수 있는 몹보다 많이 처치함' };
   for (const k of Object.keys(kills)) {
-    if (kills[k] > 0 && earliestThreat(MOBS[k].from, times) > time) return { ok: false, reason: `${MOBS[k].name}가 나오기 전에 처치함` };
+    if (kills[k] > 0 && earliestThreat(MOBS[k].from, times) > time) return { ok: false, reason: `나오기 전에 처치함: ${MOBS[k].name}` };
   }
   return { ok: true, score: scoreOf(kills) };
 }

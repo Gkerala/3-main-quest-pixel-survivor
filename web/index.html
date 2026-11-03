@@ -4,20 +4,22 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>pixel-survivor</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/galmuri@2.40.3/dist/galmuri.min.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<canvas id="backdrop" width="320" height="180" aria-hidden="true"></canvas>
 <main>
   <!-- 1. 시작/로그인 -->
-  <section id="screen-start" class="screen">
-    <h1 class="logo">PIXEL<br>SURVIVOR</h1>
-    <p class="tagline">하루 한 번, 10분, 모두 같은 조건에서</p>
-    <p id="guest-note" class="note" hidden>가입하거나 구글을 연동하면 지금까지의 게스트 기록이 회원 계정으로 저장됩니다.</p>
+  <section id="screen-start" class="screen split">
+    <div class="hero">
+      <h1 class="logo">PIXEL<br>SURVIVOR</h1>
+      <p class="tagline">하루 한 번, 10분. 오늘은 모두 같은 패턴으로 겨룹니다.</p>
+    </div>
     <div class="panel">
+      <p id="guest-note" class="note" hidden>가입하거나 구글을 연동하면 지금까지의 게스트 기록이 회원 계정으로 옮겨집니다.</p>
       <button id="btn-guest" class="btn primary">게스트로 바로 시작</button>
-      <div class="divider"><span>또는</span></div>
+      <div class="divider"><span>또는 계정으로</span></div>
       <form id="auth-form">
         <label>아이디 <input id="auth-id" autocomplete="username" maxlength="20" required></label>
         <label>비밀번호 <input id="auth-pw" type="password" autocomplete="current-password" minlength="6" required></label>
@@ -33,26 +35,30 @@
   <!-- 2. 대기 -->
   <section id="screen-lobby" class="screen" hidden>
     <header class="profile">
-      <div><strong id="profile-name"></strong><span id="profile-status" class="badge"></span></div>
+      <div class="who"><strong id="profile-name"></strong><span id="profile-status" class="badge"></span></div>
       <div class="row">
         <button id="btn-save-guest" class="btn small" hidden>회원으로 저장</button>
         <button id="btn-logout" class="btn small ghost">로그아웃</button>
       </div>
     </header>
     <div id="google-link" class="google-slot" hidden>
-      <p class="hint">구글을 연동하면 아이디·구글 어느 쪽으로 로그인해도 이 계정으로 들어옵니다.</p>
+      <p class="hint">구글을 연동하면 아이디와 구글 어느 쪽으로 로그인해도 이 계정으로 들어옵니다.</p>
       <div id="google-link-btn"></div>
     </div>
-    <p id="lobby-date" class="tagline"></p>
-    <button id="btn-play" class="btn primary big">게임 시작</button>
+    <div class="today">
+      <p class="today-label">오늘의 패턴</p>
+      <p id="lobby-date" class="today-date"></p>
+      <p class="hint">새 패턴까지 <b id="lobby-next">--:--:--</b></p>
+      <button id="btn-play" class="btn primary big">게임 시작</button>
+    </div>
     <nav class="menu">
-      <button class="btn" data-soon>랭킹</button>
-      <button class="btn" data-soon>프로필 설정</button>
-      <button class="btn" data-soon>상점</button>
-      <button class="btn" data-soon>환경설정</button>
-      <button class="btn" data-soon>도감</button>
+      <button class="btn tile" data-soon>랭킹</button>
+      <button class="btn tile" data-soon>프로필 설정</button>
+      <button class="btn tile" data-soon>상점</button>
+      <button class="btn tile" data-soon>환경설정</button>
+      <button class="btn tile" data-soon>도감</button>
     </nav>
-    <p class="hint">WASD로 움직이고, 마우스를 향해 자동으로 공격합니다. 몹을 처치할수록 적도 빨리 강해집니다.</p>
+    <p class="hint keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 로 움직이고, 마우스 쪽으로 자동 공격합니다. 많이 처치할수록 적도 빨리 강해집니다.</p>
   </section>
 
   <!-- 3. 게임 -->
@@ -60,14 +66,15 @@
     <div class="stage">
       <canvas id="game-canvas" width="320" height="180"></canvas>
       <div class="hud">
-        <div class="hp"><div id="hud-hp"></div></div>
-        <span>⏱ <b id="hud-time">00:00</b></span>
-        <span>점수 <b id="hud-score">0</b></span>
-        <span>Lv <b id="hud-level">1</b></span>
-        <span title="시간과 처치 수로 오른다. 높을수록 적이 강하다">위협 <b id="hud-threat">0</b></span>
+        <div class="hp" title="체력"><div id="hud-hp"></div></div>
+        <span class="stat"><i>시간</i><b id="hud-time">00:00</b></span>
+        <span class="stat"><i>점수</i><b id="hud-score">0</b></span>
+        <span class="stat"><i>Lv</i><b id="hud-level">1</b></span>
+        <span class="stat threat" title="시간과 처치 수로 오릅니다. 높을수록 적이 강합니다"><i>위협</i><b id="hud-threat">0</b></span>
       </div>
       <div id="levelup" class="levelup" hidden>
-        <p>레벨 업! 강화를 하나 고르세요</p>
+        <p class="levelup-title">레벨 업</p>
+        <p class="hint">강화를 하나 고르세요. 숫자키 1·2·3도 됩니다</p>
         <div id="levelup-cards" class="cards"></div>
       </div>
     </div>
@@ -77,14 +84,17 @@
   <section id="screen-result" class="screen" hidden>
     <h2 class="logo small">GAME OVER</h2>
     <div class="panel scores">
-      <div><span>현재 점수</span><b id="result-score"></b></div>
+      <p id="result-new" class="new-best" hidden>최고 기록 갱신</p>
+      <div class="score-main"><span>이번 점수</span><b id="result-score"></b></div>
       <div><span>내 최고 점수</span><b id="result-best"></b></div>
-      <p>생존 <span id="result-time"></span></p>
-      <p>처치 <span id="result-kills"></span></p>
+      <dl>
+        <dt>생존</dt><dd id="result-time"></dd>
+        <dt>처치</dt><dd id="result-kills"></dd>
+      </dl>
     </div>
-    <div class="row">
+    <div class="row actions">
       <button id="btn-again" class="btn primary">다시 하기</button>
-      <button id="btn-lobby" class="btn">대기 화면</button>
+      <button id="btn-lobby" class="btn">대기 화면으로</button>
     </div>
   </section>
 </main>

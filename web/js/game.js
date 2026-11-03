@@ -2,14 +2,15 @@
 // options.choose(cards): 레벨업 카드 3장 중 하나를 Promise로 돌려준다 (화면이 띄운다)
 // options.bot: 테스트용. 마우스 대신 가장 가까운 몹을 조준한다
 import { MOBS, MAX_TIME, FIRST_SPAWN, spawnInterval, hpScale, dmgScale, unlocked, scoreOf, seededRandom, threatOf } from './rules.js';
-import { SPRITES } from './sprites.js';
+import { gameArt } from './slime-art.js';
 
-const W = 320, H = 180, SIZE = 16, TILE = 32;
+const W = 320, H = 180, TILE = 32;
 const SPAWN_RADIUS = 220;
 const PLAYER = { hp: 100, speed: 110, damage: 20, cooldown: 0.5 };
 const BOLT = { speed: 300, life: 1, spread: 0.2 }; // spread: 탄 여러 발일 때 사이 각도(라디안)
 const LEVEL_XP = 6; // 다음 레벨까지 필요한 경험치 = 레벨 × 6
 const MAX_DT = 0.05; // 탭을 바꿨다 돌아와도 한 번에 크게 건너뛰지 않게
+const DEATH_ANIM = 1; // 쓰러지는 모습을 보여 주는 시간(초). 기록 시간에는 들어가지 않는다
 const STEP = 1 / 60; // 게임 계산은 항상 이 간격으로 쪼갠다. 그래야 화면 프레임 속도와 상관없이 같은 판이 나온다
 
 // 강화는 더하기 위주로. 곱하기로 끝없이 늘리면 몹보다 빨리 강해져 끝나지 않는다
@@ -29,6 +30,7 @@ const KEYS = { KeyW: [0, -1], KeyS: [0, 1], KeyA: [-1, 0], KeyD: [1, 0],
 export function startGame(canvas, hud, seedText, { choose, bot = false, random = Math.random } = {}) {
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = false;
+  const ART = gameArt();
   const rand = seededRandom(seedText); // 출현에만 쓴다. 그래야 그날은 모두 같은 패턴
   const held = new Set();
   let aim = 0; // 라디안. 마우스 방향
@@ -46,11 +48,11 @@ export function startGame(canvas, hud, seedText, { choose, bot = false, random =
   addEventListener('mousemove', onMouse);
 
   const p = { x: 0, y: 0, hp: PLAYER.hp, maxHp: PLAYER.hp, speed: PLAYER.speed, damage: PLAYER.damage,
-    cooldown: PLAYER.cooldown, shots: 1, pierce: 0, level: 1, xp: 0, reload: 0, facing: 1, moving: false, taken: {} };
-  const mobs = [], bolts = [];
+    cooldown: PLAYER.cooldown, shots: 1, pierce: 0, level: 1, xp: 0, reload: 0, facing: 1, moving: false, taken: {}, shotT: -9, hurtT: -9 };
+  const mobs = [], bolts = [], corpses = []; // corpses: 쓰러지는 모습만 남은 몹 (판정 없음)
   const kills = Object.fromEntries(Object.keys(MOBS).map(k => [k, 0]));
   let time = 0, killCount = 0, nextSpawn = FIRST_SPAWN, last = performance.now();
-  let pendingLevels = 0, choosing = false, acc = 0;
+  let pendingLevels = 0, choosing = false, acc = 0, deathT = 0;
 
   return new Promise(resolve => {
     function frame(now) {
@@ -67,11 +69,13 @@ export function startGame(canvas, hud, seedText, { choose, bot = false, random =
           shoot(STEP);
           fly(STEP);
           hurt(STEP);
+          fade(STEP);
         }
       }
+      if (p.hp <= 0) deathT += dt;
       draw(now);
       drawHud();
-      if (p.hp <= 0 || time >= MAX_TIME) {
+      if ((p.hp <= 0 && deathT >= DEATH_ANIM) || (p.hp > 0 && time >= MAX_TIME)) {
         removeEventListener('keydown', onKey);
         removeEventListener('keyup', onKey);
         removeEventListener('mousemove', onMouse);
@@ -115,7 +119,8 @@ export function startGame(canvas, hud, seedText, { choose, bot = false, random =
       const angle = rand() * Math.PI * 2;
       const m = MOBS[type];
       mobs.push({ type, x: p.x + Math.cos(angle) * SPAWN_RADIUS, y: p.y + Math.sin(angle) * SPAWN_RADIUS,
-        hp: m.hp * hpScale(threat), dmg: m.dmg * dmgScale(threat), speed: m.speed });
+        hp: m.hp * hpScale(threat), dmg: m.dmg * dmgScale(threat), speed: m.speed,
+        hitT: -9, biting: false, phase: nextSpawn % 1 }); // phase: 몹마다 걷는 박자를 어긋나게
       nextSpawn += spawnInterval(threat);
     }
   }
@@ -143,6 +148,7 @@ export function startGame(canvas, hud, seedText, { choose, bot = false, random =
     if (p.reload > 0) return;
     // 남은 시간을 버리지 않고 이어 붙인다. 버리면 프레임이 느릴수록 공격이 느려진다
     p.reload = Math.max(p.reload + p.cooldown, 0);
+    p.shotT = time;
     if (bot) aim = nearestAngle() ?? aim;
     p.facing = Math.cos(aim) < 0 ? -1 : 1;
     for (let i = 0; i < p.shots; i++) {
@@ -177,6 +183,7 @@ export function startGame(canvas, hud, seedText, { choose, bot = false, random =
       const hit = mobs.find(m => !b.hit.has(m) && Math.abs(m.x - b.x) < 10 && Math.abs(m.y - b.y) < 10);
       if (hit) {
         hit.hp -= p.damage;
+        hit.hitT = time;
         b.hit.add(hit);
         if (b.pierce-- <= 0) b.life = 0;
       }
@@ -184,7 +191,9 @@ export function startGame(canvas, hud, seedText, { choose, bot = false, random =
     }
     for (let i = mobs.length - 1; i >= 0; i--) {
       if (mobs[i].hp > 0) continue;
-      kills[mobs[i].type]++;
+      const m = mobs[i];
+      corpses.push({ type: m.type, x: m.x, y: m.y, t: 0, flip: m.x > p.x ? -1 : 1 });
+      kills[m.type]++;
       killCount++;
       gainXp(MOBS[mobs[i].type].xp);
       mobs.splice(i, 1);
@@ -202,8 +211,13 @@ export function startGame(canvas, hud, seedText, { choose, bot = false, random =
 
   function hurt(dt) {
     for (const m of mobs) {
-      if (Math.abs(m.x - p.x) < 11 && Math.abs(m.y - p.y) < 11) p.hp -= m.dmg * dt;
+      m.biting = Math.abs(m.x - p.x) < 11 && Math.abs(m.y - p.y) < 11;
+      if (m.biting) { p.hp -= m.dmg * dt; p.hurtT = time; }
     }
+  }
+
+  function fade(dt) {
+    for (let i = corpses.length - 1; i >= 0; i--) if ((corpses[i].t += dt) > 0.7) corpses.splice(i, 1);
   }
 
   function draw(now) {
@@ -217,20 +231,44 @@ export function startGame(canvas, hud, seedText, { choose, bot = false, random =
         if (h === 0) { ctx.fillStyle = '#35503d'; ctx.fillRect(tx * TILE - cx + 12, ty * TILE - cy + 14, 3, 2); }
       }
     }
-    const step = Math.floor(now / 180) % 2;
-    for (const m of mobs) blit(SPRITES[m.type][0], m.x - cx, m.y - cy, m.x > p.x ? -1 : 1);
-    for (const b of bolts) blit(SPRITES.bolt[0], b.x - cx, b.y - cy, 1);
-    blit(SPRITES.player[p.moving ? step : 0], W / 2, H / 2, p.facing);
+    const t = now / 1000;
+    for (const c of corpses) put(ART.mobs[c.type].death, c.t, false, c.x - cx, c.y - cy, c.flip);
+    for (const m of mobs) {
+      const a = ART.mobs[m.type];
+      // 맞은 순간은 하얗게, 붙어 있으면 공격 모션, 아니면 걷기. 공격해도 사라지지 않는다
+      if (time - m.hitT < 0.08) put(a.hit, 0, false, m.x - cx, m.y - cy, m.x > p.x ? -1 : 1);
+      else put(m.biting ? a.attack : a.walk, t + m.phase, true, m.x - cx, m.y - cy, m.x > p.x ? -1 : 1);
+    }
+    for (const b of bolts) blit(ART.goo[Math.floor(t * 8) % 2], b.x - cx, b.y - cy, 1, 4, 4, Math.atan2(b.vy, b.vx));
+    drawPlayer(t);
     // 조준선: 마우스 방향을 짧게 보여 준다
     ctx.fillStyle = '#e8b04a';
     for (let r = 14; r <= 26; r += 4) ctx.fillRect(Math.round(W / 2 + Math.cos(aim) * r), Math.round(H / 2 + Math.sin(aim) * r), 1, 1);
   }
 
-  function blit(img, x, y, flip) {
+  function drawPlayer(t) {
+    const h = ART.hero, x = W / 2, y = H / 2;
+    if (p.hp <= 0) return put(h.death, deathT, false, x, y, p.facing);
+    // 맞는 동안은 하얀 번쩍임과 질끈 감은 눈을 번갈아
+    if (time - p.hurtT < 0.12) return put(h.hit, Math.floor(t * 12) % 2 / h.hit.fps, false, x, y, p.facing);
+    // 공격 모션은 공격 간격 안에 다 보여 준다 (공격 속도가 오르면 같이 빨라진다)
+    const since = time - p.shotT, dur = Math.min(0.5, p.cooldown);
+    if (since < dur) return put(h.attack, (since / dur) * h.attack.frames.length / h.attack.fps, false, x, y, p.facing);
+    put(h.idle, t * (p.moving ? 2.5 : 1), true, x, y, p.facing);
+  }
+
+  // 애니메이션의 t초째 프레임을 기준점(몸 가운데)이 (x, y)에 오게 그린다
+  function put(anim, t, loop, x, y, flip) {
+    const n = anim.frames.length, i = Math.floor(t * anim.fps);
+    blit(anim.frames[loop ? i % n : Math.min(n - 1, i)], x, y, flip, anim.ax, anim.ay);
+  }
+
+  function blit(img, x, y, flip, ax, ay, angle = 0) {
     ctx.save();
     ctx.translate(Math.round(x), Math.round(y));
+    if (angle) ctx.rotate(angle);
     ctx.scale(flip, 1);
-    ctx.drawImage(img, -SIZE / 2, -SIZE / 2);
+    ctx.drawImage(img, -ax, -ay);
     ctx.restore();
   }
 

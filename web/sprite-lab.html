@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>슬라임 도트 초안</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/galmuri@2.40.3/dist/galmuri.min.css">
+<link rel="stylesheet" href="style.css">
+<style>
+  main { max-width: 1100px; }
+  h1 { font: 700 28px var(--title); color: var(--ember); margin: 0 0 6px; }
+  h2 { font: 700 18px var(--title); margin: 40px 0 12px; }
+  .lead { color: var(--dim); margin: 0 0 8px; max-width: 70ch; }
+  .char { background: rgba(34, 48, 42, .9); padding: 18px; margin: 0 3px 22px; box-shadow: 0 -3px 0 0 var(--edge), 0 3px 0 0 var(--edge), -3px 0 0 0 var(--edge), 3px 0 0 0 var(--edge); }
+  .char header { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; margin-bottom: 12px; }
+  .char strong { font: 700 17px var(--title); color: var(--ember); }
+  .char .role { color: var(--mana); font-size: 12px; }
+  .char .atk { width: 100%; color: var(--dim); font-size: 13px; margin: 0; }
+  .anims { display: flex; flex-wrap: wrap; gap: 14px; }
+  figure { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+  figcaption { font-size: 12px; color: var(--dim); }
+  figure canvas { image-rendering: pixelated; background: #26352d; box-shadow: 0 0 0 2px #000; }
+  .strip { image-rendering: pixelated; margin-top: 2px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>슬라임 도트 초안</h1>
+  <p class="lead">영웅과 보스는 슬라임, 적은 슬라임을 사냥하러 온 숲의 무리입니다. 칸마다 애니메이션이 반복되고, 아래 띠는 같은 동작의 프레임을 순서대로 펼친 것입니다.</p>
+  <div id="root"></div>
+</main>
+<script type="module">
+  import { HEROES, BOSS, ENEMIES, bake } from './js/slime-art.js';
+
+  const SCALE = Number(new URLSearchParams(location.search).get('x')) || 6, players = [];
+  const root = document.getElementById('root');
+  const LABEL = { idle: '가만히', walk: '이동', attack: '공격', hit: '피격', death: '쓰러짐' };
+
+  function bounds(anim) {
+    let w = 16, h = 16;
+    for (const f of anim.frames) for (const l of f) { w = Math.max(w, l.x + l.g.w); h = Math.max(h, l.y + l.g.h); }
+    return [w, h];
+  }
+
+  function section(title, list) {
+    const h = document.createElement('h2');
+    h.textContent = title;
+    root.append(h);
+    for (const ch of list) {
+      const box = document.createElement('article');
+      box.className = 'char';
+      box.innerHTML = `<header><strong></strong><span class="role"></span><p class="atk"></p></header><div class="anims"></div>`;
+      box.querySelector('strong').textContent = ch.name;
+      box.querySelector('.role').textContent = ch.role;
+      box.querySelector('.atk').textContent = ch.attack;
+      for (const [name, anim] of Object.entries(ch.anims)) {
+        const [w, h] = bounds(anim);
+        const frames = anim.frames.map(f => f.map(l => ({ c: bake(l.g), x: l.x, y: l.y })));
+        const fig = document.createElement('figure');
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = h; cv.style.width = `${w * SCALE}px`;
+        const strip = document.createElement('canvas');
+        strip.className = 'strip';
+        strip.width = w * frames.length; strip.height = h; strip.style.width = `${w * frames.length * 2}px`;
+        const sx = strip.getContext('2d');
+        frames.forEach((f, i) => f.forEach(l => sx.drawImage(l.c, i * w + l.x, l.y)));
+        const cap = document.createElement('figcaption');
+        cap.textContent = `${LABEL[name]} · ${frames.length}프레임`;
+        fig.append(cv, cap, strip);
+        box.querySelector('.anims').append(fig);
+        // 쓰러짐·피격은 끝 프레임에서 잠깐 멈췄다가 다시 보여 준다
+        const hold = name === 'death' || name === 'hit' ? 4 : 0;
+        players.push({ ctx: cv.getContext('2d'), frames, fps: anim.fps, hold, w, h });
+      }
+      root.append(box);
+    }
+  }
+
+  section('영웅 슬라임 (공격 방식마다 하나)', HEROES);
+  section('보스', [BOSS]);
+  section('적', ENEMIES);
+
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function tick(now) {
+    for (const p of players) {
+      const n = p.frames.length + p.hold;
+      const i = Math.min(p.frames.length - 1, Math.floor((now / 1000) * p.fps) % n);
+      p.ctx.clearRect(0, 0, p.w, p.h);
+      for (const l of p.frames[still ? 0 : i]) p.ctx.drawImage(l.c, l.x, l.y);
+    }
+    if (!still) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+</script>
+</body>
+</html>
