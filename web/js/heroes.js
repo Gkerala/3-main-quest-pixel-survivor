@@ -19,7 +19,7 @@ export const HERO_DEFS = {
       { id: 'bigGoo', grade: 'A', tier: 1, name: '왕방울 점액', desc: '점액탄이 크고 무거워진다. 피해 ×1.4, 판정이 넓어진다', max: 1, apply: p => { p.damage *= 1.4; p.boltScale = 1.6; } },
       { id: 'seed', grade: 'A', tier: 2, name: '씨앗 폭탄', desc: '맞으면 작게 터져 주변도 다친다', max: 1, apply: p => { p.seed = true; } },
       { id: 'vine', grade: 'A', tier: 3, name: '덩굴', desc: '맞은 적이 1.5초 느려진다', max: 1, apply: p => { p.vine = true; } },
-      { id: 'bloom', grade: 'B', tier: 4, name: '꽃비', desc: '3초마다 사방으로 탄 8발', max: 1, apply: p => { p.bloom = true; } },
+      { id: 'bloom', grade: 'B', tier: 3, name: '꽃비', desc: '3초마다 사방으로 탄 8발', max: 1, apply: p => { p.bloom = true; } },
     ],
   },
   frost: {
@@ -31,7 +31,7 @@ export const HERO_DEFS = {
       { id: 'spear', grade: 'A', tier: 1, name: '얼음창', desc: '고드름이 창처럼 길어진다. 피해 ×1.3, 2마리 더 뚫는다', max: 1, apply: p => { p.damage *= 1.3; p.pierce += 2; p.boltScale = 1.5; } },
       { id: 'freeze', grade: 'A', tier: 2, name: '빙결', desc: '맞은 적이 0.5초 멈춘다', max: 1, apply: p => { p.freeze = true; } },
       { id: 'shard', grade: 'A', tier: 3, name: '얼음 파편', desc: '고드름이 끝나면 두 갈래로 갈라진다', max: 1, apply: p => { p.shard = true; } },
-      { id: 'blizzard', grade: 'B', tier: 4, name: '눈보라', desc: '가까운 적이 30% 느려진다', max: 1, apply: p => { p.blizzard = true; } },
+      { id: 'blizzard', grade: 'B', tier: 3, name: '눈보라', desc: '가까운 적이 30% 느려진다', max: 1, apply: p => { p.blizzard = true; } },
     ],
   },
   magma: {
@@ -43,7 +43,7 @@ export const HERO_DEFS = {
       { id: 'flare', grade: 'A', tier: 1, name: '백열 고리', desc: '고리가 하얗게 달아오른다. 피해 ×1.3, 범위 ×1.25', max: 1, apply: p => { p.damage *= 1.3; p.radius *= 1.25; p.flare = true; } },
       { id: 'ember', grade: 'A', tier: 2, name: '잔불', desc: '맞은 적이 2초 동안 탄다', max: 1, apply: p => { p.ember = true; } },
       { id: 'erupt', grade: 'B', tier: 3, name: '분화', desc: '2초마다 가까운 적 자리에서 폭발', max: 1, apply: p => { p.erupt = true; } },
-      { id: 'armor', grade: 'B', tier: 4, name: '용암 갑옷', desc: '붙은 적이 계속 화상을 입는다', max: 1, apply: p => { p.armor = true; } },
+      { id: 'armor', grade: 'B', tier: 3, name: '용암 갑옷', desc: '붙은 적이 계속 화상을 입는다', max: 1, apply: p => { p.armor = true; } },
     ],
   },
   shade: {
@@ -55,7 +55,7 @@ export const HERO_DEFS = {
       { id: 'abyss', grade: 'A', tier: 1, name: '심연의 이빨', desc: '반달이 붉게 넓어진다. 피해 ×1.3, 물기 각도 ×1.5', max: 1, apply: p => { p.damage *= 1.3; p.arc *= 1.5; p.abyss = true; } },
       { id: 'step', grade: 'B', tier: 2, name: '그림자 걸음', desc: '4초마다 조준 방향으로 돌진하며 지나간 자리를 문다', max: 1, apply: p => { p.step = true; } },
       { id: 'clone', grade: 'A', tier: 3, name: '분신', desc: '뒤쪽도 같이 문다', max: 1, apply: p => { p.clone = true; } },
-      { id: 'veil', grade: 'C', tier: 4, name: '밤의 장막', desc: '10초마다 1.5초 무적', max: 1, apply: p => { p.veil = true; } },
+      { id: 'veil', grade: 'C', tier: 3, name: '밤의 장막', desc: '10초마다 1.5초 무적', max: 1, apply: p => { p.veil = true; } },
     ],
   },
 };

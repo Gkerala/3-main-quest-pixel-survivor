@@ -1,0 +1,202 @@
+{
+ "none-1": {
+  "w": 208,
+  "h": 132,
+  "ax": 105,
+  "ay": 132,
+  "scale": 1,
+  "facing": "left",
+  "motions": {
+   "idle": {
+    "frames": 6,
+    "fps": 6,
+    "loop": true
+   },
+   "move": {
+    "frames": 6,
+    "fps": 10,
+    "loop": true
+   },
+   "death": {
+    "frames": 7,
+    "fps": 8,
+    "loop": false
+   }
+  }
+ },
+ "none-2": {
+  "w": 73,
+  "h": 42,
+  "ax": 35,
+  "ay": 42,
+  "scale": 3,
+  "facing": "right",
+  "motions": {
+   "idle": {
+    "frames": 16,
+    "fps": 8,
+    "loop": true
+   },
+   "move": {
+    "frames": 16,
+    "fps": 12,
+    "loop": true
+   },
+   "death": {
+    "frames": 7,
+    "fps": 8,
+    "loop": false
+   }
+  }
+ },
+ "fire-1": {
+  "w": 224,
+  "h": 141,
+  "ax": 114,
+  "ay": 141,
+  "scale": 1,
+  "facing": "left",
+  "motions": {
+   "idle": {
+    "frames": 6,
+    "fps": 6,
+    "loop": true
+   },
+   "move": {
+    "frames": 6,
+    "fps": 10,
+    "loop": true
+   },
+   "death": {
+    "frames": 7,
+    "fps": 8,
+    "loop": false
+   }
+  }
+ },
+ "fire-2": {
+  "w": 67,
+  "h": 45,
+  "ax": 32,
+  "ay": 45,
+  "scale": 3,
+  "facing": "right",
+  "motions": {
+   "idle": {
+    "frames": 18,
+    "fps": 8,
+    "loop": true
+   },
+   "move": {
+    "frames": 22,
+    "fps": 12,
+    "loop": true
+   },
+   "death": {
+    "frames": 7,
+    "fps": 8,
+    "loop": false
+   }
+  }
+ },
+ "ice-1": {
+  "w": 222,
+  "h": 173,
+  "ax": 112,
+  "ay": 173,
+  "scale": 1,
+  "facing": "left",
+  "motions": {
+   "idle": {
+    "frames": 6,
+    "fps": 6,
+    "loop": true
+   },
+   "move": {
+    "frames": 6,
+    "fps": 10,
+    "loop": true
+   },
+   "death": {
+    "frames": 7,
+    "fps": 8,
+    "loop": false
+   }
+  }
+ },
+ "ice-2": {
+  "w": 72,
+  "h": 40,
+  "ax": 34,
+  "ay": 40,
+  "scale": 3,
+  "facing": "right",
+  "motions": {
+   "idle": {
+    "frames": 16,
+    "fps": 8,
+    "loop": true
+   },
+   "move": {
+    "frames": 20,
+    "fps": 12,
+    "loop": true
+   },
+   "death": {
+    "frames": 7,
+    "fps": 8,
+    "loop": false
+   }
+  }
+ },
+ "lightning-1": {
+  "w": 218,
+  "h": 141,
+  "ax": 109,
+  "ay": 141,
+  "scale": 1,
+  "facing": "left",
+  "motions": {
+   "idle": {
+    "frames": 6,
+    "fps": 6,
+    "loop": true
+   },
+   "move": {
+    "frames": 6,
+    "fps": 10,
+    "loop": true
+   },
+   "death": {
+    "frames": 7,
+    "fps": 8,
+    "loop": false
+   }
+  }
+ },
+ "lightning-2": {
+  "w": 67,
+  "h": 39,
+  "ax": 30,
+  "ay": 39,
+  "scale": 3,
+  "facing": "right",
+  "motions": {
+   "idle": {
+    "frames": 16,
+    "fps": 8,
+    "loop": true
+   },
+   "move": {
+    "frames": 20,
+    "fps": 12,
+    "loop": true
+   },
+   "death": {
+    "frames": 7,
+    "fps": 8,
+    "loop": false
+   }
+  }
+ }
+}

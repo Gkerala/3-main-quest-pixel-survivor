@@ -21,13 +21,18 @@ for (let d = 0; d < days; d++) {
   const date = `2026-11-${String(3 + d).padStart(2, '0')}`;
   let done;
   queue = [];
-  startGame({ getContext: () => ctx, getBoundingClientRect: () => ({}) },
-    { time: el(), score: el(), level: el(), hp: el(), threat: el() }, date,
+  const hud = { time: el(), score: el(), level: el(), hp: el(), threat: el(), xp: el() };
+  startGame({ getContext: () => ctx, getBoundingClientRect: () => ({}) }, hud, date,
     { bot: true, random: seededRandom(`cards-${date}`), hero, tier }).then(r => { done = r; });
-  while (!done && queue.length) { const cb = queue.shift(); now += dt * 1000; cb(now); await null; }
+  const lv = [], sc = []; // 분마다 레벨, 점수
+  while (!done && queue.length) {
+    const cb = queue.shift(); now += dt * 1000; cb(now); await null;
+    const min = parseInt(hud.time.textContent);
+    if (min > lv.length - 1 && min > 0) { lv[min] = hud.level.textContent; sc[min] = hud.score.textContent; }
+  }
   const check = validateRecord(done);
   if (!check.ok) failed++;
   const m = Math.floor(done.time / 60), s = Math.round(done.time % 60);
-  console.log(`${date}  생존 ${m}분 ${String(s).padStart(2, '0')}초  점수 ${String(check.score ?? '-').padStart(5)}  처치 ${JSON.stringify(done.kills)}  보스 ${done.boss ? `${done.boss.key}${done.boss.killed ? ' 처치' : ' 못 잡음'}` : '-'}  서버 검증 ${check.ok ? '통과' : `거부(${check.reason})`}`);
+  console.log(`${date}  생존 ${m}분 ${String(s).padStart(2, '0')}초  점수 ${String(check.score ?? '-').padStart(5)}  Lv ${hud.level.textContent} (분마다 ${lv.slice(1).join('/')})  점수(분마다 ${sc.slice(1).join('/')})  처치 ${JSON.stringify(done.kills)}  보스 ${done.boss ? `${done.boss.key}${done.boss.killed ? ' 처치' : ' 못 잡음'}` : '-'}  서버 검증 ${check.ok ? '통과' : `거부(${check.reason})`}`);
 }
 if (failed) { console.error(`서버가 실제 플레이 기록 ${failed}개를 거부했다. rules.js의 상한 계산을 고쳐야 한다`); process.exit(1); }

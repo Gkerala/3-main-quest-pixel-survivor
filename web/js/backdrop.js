@@ -1,5 +1,6 @@
 // 시작·대기 화면 뒤에서 몹이 천천히 지나가는 배경. 게임과 같은 바닥과 도트를 쓴다
 import { gameArt } from './slime-art.js';
+import { heroArt } from './hero-sprites.js';
 
 const W = 320, H = 180, TILE = 32, COUNT = 14;
 const TYPES = ['hero', 'slime', 'bat', 'knight', 'golem'];
@@ -31,7 +32,9 @@ export function startBackdrop(canvas) {
       ctx.save();
       ctx.translate(Math.round(m.x), Math.round(m.y));
       ctx.scale(m.vx > 0 ? -1 : 1, 1);
-      const a = m.type === 'hero' ? art.hero.idle : art.mobs[m.type].walk;
+      const a = m.type === 'hero' ? heroArt('sprout', 1)?.move ?? art.hero.idle : art.mobs[m.type].walk;
+      ctx.imageSmoothingEnabled = !!a.scale; // 세밀한 영웅 그림은 크게 줄이므로 부드럽게
+      ctx.scale(a.scale ?? 1, a.scale ?? 1);
       ctx.drawImage(a.frames[(Math.floor(now / 250) + m.phase) % a.frames.length], -a.ax, -a.ay);
       ctx.restore();
     }

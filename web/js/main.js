@@ -5,6 +5,7 @@ import { MOBS, HEROES, BOSSES, GROWTH, tierOf, todayKST } from './rules.js';
 import { GOOGLE_CLIENT_ID } from './config.js';
 import { startBackdrop } from './backdrop.js';
 import { gameArt, STAGE_NAMES } from './slime-art.js';
+import { heroArt, loadHeroSprites } from './hero-sprites.js';
 
 const $ = id => document.getElementById(id);
 const STATUS = { guest: '게스트', web: '웹 회원', google: '구글 회원', both: '웹 + 구글' };
@@ -17,6 +18,8 @@ const HINTS = {
   magma: '10분 안에 1,500마리 잡고 보스를 이기면',
   shade: '체력 20% 아래에서 버티고 보스를 이기면',
 };
+// 영웅 그림을 못 읽어도 게임은 기존 그림으로 돌아간다
+await loadHeroSprites().catch(e => console.error('영웅 그림 불러오기 실패', e));
 const backdrop = startBackdrop($('backdrop'));
 
 function show(name) {
@@ -60,11 +63,20 @@ const owned = h => h === 'sprout' || !!user.progress?.heroes?.includes(h);
 const scoreFor = h => user.progress?.scores?.[h] ?? 0;
 
 // 애니메이션 첫 프레임을 기준점이 가운데 오게 작은 캔버스에 옮긴다. dark면 실루엣
+const HERO_ICON = 64; // 대기실 영웅 그림 칸
 function sprite(anim, size, dark) {
   const c = document.createElement('canvas');
   c.width = c.height = size;
   const x = c.getContext('2d');
   if (dark) x.filter = 'brightness(0) opacity(.55)';
+  if (anim.fit) { // 세밀한 영웅 그림: 칸을 넓혀 몸이 꽉 차게 그린다
+    c.width = c.height = HERO_ICON;
+    if (dark) x.filter = 'brightness(0) opacity(.55)'; // 크기를 바꾸면 설정이 초기화된다
+    x.translate(HERO_ICON / 2, HERO_ICON / 2);
+    x.scale(anim.fit * HERO_ICON, anim.fit * HERO_ICON);
+    x.drawImage(anim.frames[0], -anim.ax, -anim.ay);
+    return c;
+  }
   x.drawImage(anim.frames[0], size / 2 - anim.ax, size / 2 + 2 - anim.ay);
   return c;
 }
@@ -81,9 +93,9 @@ function renderHeroes() {
     const name = document.createElement('strong');
     const info = document.createElement('small');
     name.textContent = own ? STAGE_NAMES[h][tier - 1] : '???';
-    info.textContent = !own ? HINTS[h] : tier < 4 ? `${tier}단계 · 다음 단계까지 ${(GROWTH[tier] - total).toLocaleString()}점` : '4단계 · 사람의 형태';
-    b.append(sprite(gameArt(h, own ? tier : 1).hero.idle, 16, !own), name, info);
-    if (own && tier < 4) { // 다음 단계까지 얼마나 왔나
+    info.textContent = !own ? HINTS[h] : tier < 3 ? `${tier}단계 · 다음 단계까지 ${(GROWTH[tier] - total).toLocaleString()}점` : '3단계 · 최고 단계';
+    b.append(sprite(heroArt(h, own ? tier : 1)?.idle ?? gameArt(h, own ? tier : 1).hero.idle, 16, !own), name, info);
+    if (own && tier < 3) { // 다음 단계까지 얼마나 왔나
       const bar = document.createElement('span'), fill = document.createElement('i');
       bar.className = 'grow';
       fill.style.width = `${((total - GROWTH[tier - 1]) / (GROWTH[tier] - GROWTH[tier - 1])) * 100}%`;
@@ -162,7 +174,7 @@ $('btn-play').onclick = play;
 // 게임 → 결과
 async function play() {
   show('game');
-  const hud = { time: $('hud-time'), score: $('hud-score'), level: $('hud-level'), hp: $('hud-hp'), threat: $('hud-threat'),
+  const hud = { time: $('hud-time'), score: $('hud-score'), level: $('hud-level'), xp: $('hud-xp'), hp: $('hud-hp'), threat: $('hud-threat'),
     boss: $('hud-boss'), bossName: $('hud-boss-name'), bossHp: $('hud-boss-hp') };
   const record = await startGame($('game-canvas'), hud, todayKST(), { choose, pause, hero, tier: tierOf(scoreFor(hero)) });
   // 일시정지에서 그만두면 기록을 보내지 않는다

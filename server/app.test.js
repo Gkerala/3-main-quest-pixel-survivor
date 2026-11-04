@@ -3,6 +3,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createApp } from './app.js';
 import { createMemoryStore } from './store-memory.js';
+import { tierOf } from '../web/js/rules.js';
 
 let server, base;
 // 가짜 구글: 'google:<번호>'를 그 번호의 구글 계정으로 본다
@@ -133,12 +134,19 @@ test('보스 기록 검사: 10분 전 보스, 조건을 안 채운 조건 보스
   const { token } = await call('/guest', { body: {} });
   const tooEarly = await call('/records', { token, body: { ...goodRecord, boss: { key: 'prism', killed: true } } });
   assert.equal(tooEarly.valid, false);
+  // 처치 점수가 10,000을 넘으면 10분 전에도 보스가 나온다
+  const earlyByScore = await call('/records', { token, body: { time: 540, kills: { slime: 300, bat: 400, knight: 700, golem: 100 }, boss: { key: 'prism', killed: false } } });
+  assert.equal(earlyByScore.valid, true);
   const noCondition = await call('/records', { token, body: bossRecord({ key: 'frost', killed: true }, { pierce: 1 }) });
   assert.deepEqual([noCondition.valid, noCondition.reason], [false, '보스 조건을 채우지 않음: 서리 슬라임']);
   const missing = await call('/records', { token, body: bossRecord(null) });
   assert.equal(missing.valid, false);
   const frost = await call('/records', { token, body: bossRecord({ key: 'frost', killed: false }, { pierce: 3 }) });
   assert.deepEqual([frost.valid, frost.unlocked], [true, null]); // 지면 영웅을 얻지 못한다
+});
+
+test('성장 단계는 3단계까지다', () => {
+  assert.deepEqual([0, 11999, 12000, 49999, 50000, 999999].map(tierOf), [1, 1, 2, 2, 3, 3]);
 });
 
 test('영웅별 점수는 따로 쌓인다', async () => {

@@ -1,10 +1,11 @@
 // 한 판. startGame이 끝나면 { time, kills, hero, boss, pierce, lowHp }로 resolve 된다.
 // options.choose(cards): 레벨업 카드 3장 중 하나를 Promise로 돌려준다 (화면이 띄운다)
-// options.hero / tier: 고른 영웅과 성장 단계(1~4). options.bot: 테스트용. 마우스 대신 가장 가까운 몹을 조준한다
+// options.hero / tier: 고른 영웅과 성장 단계(1~3). options.bot: 테스트용. 마우스 대신 가장 가까운 몹을 조준한다
 import { MOBS, MAX_TIME, FIRST_SPAWN, spawnInterval, hpScale, dmgScale, unlocked, scoreOf, seededRandom, threatOf,
-  BOSS_TIME, BOSSES, BOSS_RULES } from './rules.js';
+  BOSS_TIME, BOSS_SCORE, BOSSES, BOSS_RULES } from './rules.js';
 import { HERO_DEFS, cardPool, GRADES, GRADE_WEIGHT } from './heroes.js';
 import { gameArt } from './slime-art.js';
+import { heroArt, RENDER_SCALE } from './hero-sprites.js';
 
 const W = 320, H = 180, TILE = 32; // W·H: 확대 1배일 때 보이는 넓이(게임 픽셀)
 const ZOOM = { min: 0.8, max: 2, step: 1.1 }; // 0.8보다 멀리 보면 몹이 나오는 자리(220px)가 화면에 보인다
@@ -14,11 +15,14 @@ const PLAYER = { hp: 100, speed: 110 };
 const SPREAD = 0.2; // 탄 여러 발일 때 사이 각도(라디안)
 const BURN = 1.2; // 잔불: 초당 공격력의 이만큼 (2초 동안)
 const EXTRA = { thorns: { every: 5, last: 3, r: 30, dps: 1.5 }, aura: { r: 36, dps: 0.8 }, orb: { every: 2.5, dmg: 3, speed: 260 } }; // B 카드 수치
-// 보스 체력·공격력은 나올 때의 위협도로 키운다. 고정값이면 10분쯤 화력에 순식간에 녹는다.
-// 막판 급강화(overtime)는 빼고 곧은 배율만 쓴다. 넣으면 한 번 닿기만 해도 쓰러진다
-const BOSS = { hp: 3000, dmg: 30, speed: 40, size: 18, xp: 40 };
+// 보스는 언제 나와도 같은 세기다. 강해지는 건 일반 몹이고, 일반 몹 체력·공격력은 보스를 넘지 못한다
+const BOSS = { hp: 20000, dmg: 200, speed: 40, size: 18, xp: 40 };
 const MOB_SIZE = 10; // 몹 판정 상자의 반 폭
-const LEVEL_XP = 6; // 다음 레벨까지 필요한 경험치 = 레벨 × 6
+// 레벨업: 필요 경험치는 5 + 0.15×레벨^2.5로, 몹 경험치는 위협도에 곧게 늘어난다. 요구량이 더 빨리 늘어서 레벨업이 점점 느려진다
+const LEVEL_XP = { base: 5, k: 0.15, pow: 2.5 };
+const XP_THREAT = 1200; // 위협도 1200이면 몹 경험치 2배
+const needXp = level => Math.round(LEVEL_XP.base + LEVEL_XP.k * level ** LEVEL_XP.pow);
+const HURT_BLINK = 0.12; // 맞은 뒤 깜빡이는 시간(초)
 const MAX_DT = 0.05; // 탭을 바꿨다 돌아와도 한 번에 크게 건너뛰지 않게
 const DEATH_ANIM = 1; // 쓰러지는 모습을 보여 주는 시간(초). 기록 시간에는 들어가지 않는다
 const STEP = 1 / 60; // 게임 계산은 항상 이 간격으로 쪼갠다. 그래야 화면 프레임 속도와 상관없이 같은 판이 나온다
@@ -36,14 +40,16 @@ export function startGame(canvas, hud, seedText, { choose, pause, bot = false, r
   ctx.imageSmoothingEnabled = false;
   const DEF = HERO_DEFS[hero];
   const ART = gameArt(hero, tier);
+  const HERO = heroArt(hero, tier) ?? ART.hero; // 시뮬레이션처럼 그림을 읽지 않았으면 기존 그림
   const rand = seededRandom(seedText); // 출현에만 쓴다. 그래야 그날은 모두 같은 패턴
   const held = new Set();
   let aim = 0; // 라디안. 마우스 방향
   let vw = W, vh = H; // 지금 보이는 넓이
   const applyZoom = () => {
     vw = Math.round(W / zoom); vh = Math.round(H / zoom);
-    canvas.width = vw; canvas.height = vh; // 캔버스 크기를 바꾸면 그리기 설정이 초기화된다
+    canvas.width = vw * RENDER_SCALE; canvas.height = vh * RENDER_SCALE; // 캔버스 크기를 바꾸면 그리기 설정이 초기화된다
     ctx.imageSmoothingEnabled = false;
+    ctx.setTransform(RENDER_SCALE, 0, 0, RENDER_SCALE, 0, 0); // 게임 계산은 그대로 게임 픽셀로 한다
   };
   applyZoom();
   const onWheel = e => {
@@ -67,7 +73,7 @@ export function startGame(canvas, hud, seedText, { choose, pause, bot = false, r
   canvas.addEventListener?.('wheel', onWheel, { passive: false }); // 시뮬레이션 캔버스에는 없다
 
   const p = { x: 0, y: 0, hp: PLAYER.hp, maxHp: PLAYER.hp, speed: PLAYER.speed, shots: 1, drain: 0, ...DEF.base,
-    level: 1, xp: 0, reload: 0, facing: 1, moving: false, taken: {}, shotT: -9, hurtT: -9 };
+    level: 1, xp: 0, reload: 0, facing: 1, moving: false, taken: {}, hurtT: -9 };
   const mobs = [], bolts = [], corpses = []; // corpses: 쓰러지는 모습만 남은 몹 (판정 없음)
   const fx = []; // 고리·폭발·물기 그림 (판정은 생길 때 한 번에 끝낸다)
   const kills = Object.fromEntries(Object.keys(MOBS).map(k => [k, 0]));
@@ -159,21 +165,20 @@ export function startGame(canvas, hud, seedText, { choose, pause, bot = false, r
       const angle = rand() * Math.PI * 2;
       const m = MOBS[type];
       mobs.push({ type, x: p.x + Math.cos(angle) * SPAWN_RADIUS, y: p.y + Math.sin(angle) * SPAWN_RADIUS,
-        hp: m.hp * hpScale(threat), dmg: m.dmg * dmgScale(threat), speed: m.speed, size: MOB_SIZE,
+        hp: Math.min(BOSS.hp, m.hp * hpScale(threat)), dmg: Math.min(BOSS.dmg, m.dmg * dmgScale(threat)), speed: m.speed, size: MOB_SIZE,
         hitT: -9, biting: false, phase: nextSpawn % 1 }); // phase: 몹마다 걷는 박자를 어긋나게
       nextSpawn += spawnInterval(threat);
     }
-    if (!bossInfo && time >= BOSS_TIME) spawnBoss();
+    if (!bossInfo && (time >= BOSS_TIME || scoreOf(kills) >= BOSS_SCORE)) spawnBoss();
   }
 
-  // 10분 보스. 조건을 가장 먼저 채운 슬라임, 하나도 못 채웠으면 프리즘 킹. 출현 난수는 쓰지 않는다
+  // 보스(10분 또는 점수 기준). 조건을 가장 먼저 채운 슬라임, 하나도 못 채웠으면 프리즘 킹. 출현 난수는 쓰지 않는다
   function spawnBoss() {
     const met = Object.entries(condT).filter(([, t]) => t < Infinity).sort((a, b) => a[1] - b[1]);
     const key = met.length ? met[0][0] : 'prism';
     bossInfo = { key, killed: false };
-    const threat = threatOf(time, killCount), hp = BOSS.hp * (1 + threat / 200);
-    boss = { type: key, boss: true, x: p.x, y: p.y - SPAWN_RADIUS * 0.7, hp, maxHp: hp,
-      dmg: BOSS.dmg * (1 + threat / 250), speed: BOSS.speed, size: BOSS.size, hitT: -9, biting: false, phase: 0 };
+    boss = { type: key, boss: true, x: p.x, y: p.y - SPAWN_RADIUS * 0.7, hp: BOSS.hp, maxHp: BOSS.hp,
+      dmg: BOSS.dmg, speed: BOSS.speed, size: BOSS.size, hitT: -9, biting: false, phase: 0 };
     mobs.push(boss);
   }
 
@@ -208,7 +213,6 @@ export function startGame(canvas, hud, seedText, { choose, pause, bot = false, r
     if (p.reload > 0) return;
     // 남은 시간을 버리지 않고 이어 붙인다. 버리면 프레임이 느릴수록 공격이 느려진다
     p.reload = Math.max(p.reload + p.cooldown, 0);
-    p.shotT = time;
     if (bot) aim = nearestAngle() ?? aim;
     p.facing = Math.cos(aim) < 0 ? -1 : 1;
     if (DEF.weapon === 'bolt') {
@@ -325,15 +329,15 @@ export function startGame(canvas, hud, seedText, { choose, pause, bot = false, r
       if (m.hp > 0) continue;
       corpses.push({ type: m.type, boss: m.boss, x: m.x, y: m.y, t: 0, flip: m.x > p.x ? -1 : 1 });
       if (m.boss) { bossInfo.killed = true; boss = null; gainXp(BOSS.xp); }
-      else { kills[m.type]++; killCount++; gainXp(MOBS[m.type].xp); }
+      else { kills[m.type]++; killCount++; gainXp(MOBS[m.type].xp * (1 + threatOf(time, killCount) / XP_THREAT)); }
       mobs.splice(i, 1);
     }
   }
 
   function gainXp(xp) {
     p.xp += xp;
-    while (p.xp >= p.level * LEVEL_XP) {
-      p.xp -= p.level * LEVEL_XP;
+    while (p.xp >= needXp(p.level)) {
+      p.xp -= needXp(p.level);
       p.level++;
       pendingLevels++;
     }
@@ -411,20 +415,16 @@ export function startGame(canvas, hud, seedText, { choose, pause, bot = false, r
   }
 
   function drawPlayer(t) {
-    const h = ART.hero, x = vw / 2, y = vh / 2;
+    const h = HERO, x = vw / 2, y = vh / 2;
     if (p.hp <= 0) return put(h.death, deathT, false, x, y, p.facing);
-    // 맞는 동안은 하얀 번쩍임과 질끈 감은 눈을 번갈아
-    if (time - p.hurtT < 0.12) return put(h.hit, Math.floor(t * 12) % 2 / h.hit.fps, false, x, y, p.facing);
-    // 공격 모션은 공격 간격 안에 다 보여 준다 (공격 속도가 오르면 같이 빨라진다)
-    const since = time - p.shotT, dur = Math.min(0.5, p.cooldown);
-    if (since < dur) return put(h.attack, (since / dur) * h.attack.frames.length / h.attack.fps, false, x, y, p.facing);
-    put(h.idle, t * (p.moving ? 2.5 : 1), true, x, y, p.facing);
+    if (time - p.hurtT < HURT_BLINK && Math.floor(t * 24) % 2) return; // 맞는 동안은 깜빡인다
+    put(p.moving ? h.move ?? h.idle : h.idle, t, true, x, y, p.facing);
   }
 
   // 애니메이션의 t초째 프레임을 기준점(몸 가운데)이 (x, y)에 오게 그린다
   function put(anim, t, loop, x, y, flip) {
     const n = anim.frames.length, i = Math.floor(t * anim.fps);
-    blit(anim.frames[loop ? i % n : Math.min(n - 1, i)], x, y, flip, anim.ax, anim.ay);
+    blit(anim.frames[loop ? i % n : Math.min(n - 1, i)], x, y, flip * (anim.flip ?? 1), anim.ax, anim.ay, 0, anim.scale ?? 1);
   }
 
   function blit(img, x, y, flip, ax, ay, angle = 0, scale = 1) {
@@ -441,6 +441,7 @@ export function startGame(canvas, hud, seedText, { choose, pause, bot = false, r
     hud.time.textContent = `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
     hud.score.textContent = scoreOf(kills) + (bossInfo?.killed ? BOSSES[bossInfo.key].score : 0);
     hud.level.textContent = p.level;
+    if (hud.xp) hud.xp.style.width = `${Math.min(1, p.xp / needXp(p.level)) * 100}%`;
     hud.threat.textContent = Math.floor(threatOf(time, killCount));
     hud.hp.style.width = `${Math.max(0, p.hp) / p.maxHp * 100}%`;
     if (!hud.boss) return; // 시뮬레이션에는 보스 막대가 없다

@@ -269,7 +269,7 @@ const deco = {
   },
 };
 
-// ── 4단계: 사람의 형태를 띤 슬라임 ──────────────────────
+// ── 3단계: 사람의 형태를 띤 슬라임 ──────────────────────
 const HUMAN_ROWS = [
   '................',
   '................',
@@ -398,18 +398,18 @@ export const BOSS = {
   ], { big: true, at: [8, 8] }),
 };
 
-// ── 성장 단계: 누적 처치 점수에 따라 1 → 4단계 ──────────
+// ── 성장 단계: 누적 처치 점수에 따라 1 → 3단계 ──────────
 export const STAGE_NAMES = {
-  sprout: ['새싹 슬라임', '꽃망울 슬라임', '만개 슬라임', '숲의 아이'],
-  frost: ['서리 슬라임', '눈꽃 슬라임', '빙관 슬라임', '겨울의 아이'],
-  magma: ['용암 슬라임', '불꽃 슬라임', '화산 슬라임', '불의 아이'],
-  shade: ['그림자 슬라임', '뿔 그림자 슬라임', '밤의 군주 슬라임', '밤의 아이'],
+  sprout: ['새싹 슬라임', '꽃망울 슬라임', '숲의 아이'],
+  frost: ['서리 슬라임', '눈꽃 슬라임', '겨울의 아이'],
+  magma: ['용암 슬라임', '불꽃 슬라임', '불의 아이'],
+  shade: ['그림자 슬라임', '뿔 그림자 슬라임', '밤의 아이'],
 };
 export const GROWTH = Object.entries(STAGE_NAMES).map(([key, names]) => ({
   key, name: names[0], role: '성장 단계', attack: names.join(' → '),
   anims: Object.fromEntries(names.map((name, i) => {
     const one = g => [{ g, x: 0, y: 0 }];
-    const frames = i < 3
+    const frames = i < 2
       ? [one(slime16(PAL[key], { tier: i + 1 })), one(slime16(PAL[key], { tier: i + 1, sx: 1.07, sy: 0.92 }))]
       : [one(human16(PAL[key], hair[key])), one(human16(PAL[key], hair[key], { bob: -1 }))];
     return [`${i + 1}단계 ${name}`, { fps: 3, frames }];
@@ -659,13 +659,13 @@ export function bake(g) {
 function heroAnims(key, tier) {
   const pal = PAL[key], one = g => [{ g, x: 0, y: 0 }];
   const eyes = key === 'shade' ? 'angry' : 'normal', glow = key === 'sprout' ? 0 : 1;
-  const draw = tier < 4 ? o => one(slime16(pal, { tier, ...o })) : o => one(human16(pal, hair[key], o));
-  const rest = tier < 4 ? { sx: 1.07, sy: 0.92 } : { bob: -1 };
-  const squash = tier < 4 ? { sx: 1.14, sy: 0.8 } : { bob: -1 };
-  const stretch = tier < 4 ? { sx: 0.9, sy: 1.12 } : {};
-  const hurt = tier < 4 ? { sx: 1.1, sy: 0.82 } : {};
+  const draw = tier < 3 ? o => one(slime16(pal, { tier, ...o })) : o => one(human16(pal, hair[key], o));
+  const rest = tier < 3 ? { sx: 1.07, sy: 0.92 } : { bob: -1 };
+  const squash = tier < 3 ? { sx: 1.14, sy: 0.8 } : { bob: -1 };
+  const stretch = tier < 3 ? { sx: 0.9, sy: 1.12 } : {};
+  const hurt = tier < 3 ? { sx: 1.1, sy: 0.82 } : {};
   return {
-    idle: { fps: tier < 4 ? 4 : 3, frames: [draw({}), draw(rest)] },
+    idle: { fps: tier < 3 ? 4 : 3, frames: [draw({}), draw(rest)] },
     attack: { fps: 8, frames: [draw({ ...squash, eyes, glow }), draw({ ...stretch, mouth: 'open', eyes, glow }), draw({ mouth: 'open', eyes }), draw({})] },
     hit: { fps: 8, frames: [draw({ ...hurt, hit: true, eyes: 'squint', mouth: 'open' }), draw({ ...hurt, eyes: 'squint', mouth: 'open' }), draw({})] },
     death: { fps: 6, frames: meltFrames(pal, false) },

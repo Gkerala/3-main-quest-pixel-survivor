@@ -13,7 +13,8 @@ export const MOBS = {
 
 // 영웅: 새싹은 처음부터, 나머지는 10분 보스를 이겨야 고를 수 있다 (SETTING.md)
 export const HEROES = ['sprout', 'frost', 'magma', 'shade'];
-export const BOSS_TIME = 600; // 초. 보스가 나오는 시각
+export const BOSS_TIME = 600; // 초. 늦어도 이때는 보스가 나온다
+export const BOSS_SCORE = 10000; // 처치 점수가 이만큼이면 10분 전이라도 바로 보스가 나온다
 // 보스: 조건을 채운 영웅 슬라임, 아무 조건도 못 채우면 프리즘 킹(이겨도 도감에만)
 export const BOSSES = {
   frost: { name: '서리 슬라임', score: 500, hero: true },
@@ -28,8 +29,8 @@ export const BOSS_RULES = {
   shade: s => s.lowHp,
 };
 // 성장: 그 영웅으로 얻은 처치 점수를 더한 값이 이만큼이면 다음 단계
-export const GROWTH = [0, 12000, 50000, 150000];
-export const tierOf = total => GROWTH.filter(n => total >= n).length; // 1~4
+export const GROWTH = [0, 12000, 50000];
+export const tierOf = total => GROWTH.filter(n => total >= n).length; // 1~3
 
 // 위협도: 시간이 지나도, 몹을 처치해도 오른다. 빨리 처치할수록 빨리 어려워진다
 export const KILL_THREAT = 0.25; // 처치 1마리 = 위협도 0.25 (1초 = 1)
@@ -109,7 +110,7 @@ export function validateRecord({ time, kills, hero = 'sprout', boss = null, pier
   if (!Number.isInteger(pierce) || pierce < 0 || typeof lowHp !== 'boolean') return { ok: false, reason: '보스 조건 값이 틀림' };
   if (boss !== null) {
     if (typeof boss !== 'object' || !BOSSES[boss.key] || typeof boss.killed !== 'boolean') return { ok: false, reason: '보스 기록 형식이 틀림' };
-    if (time < BOSS_TIME) return { ok: false, reason: '보스가 나오기 전에 끝난 기록에 보스가 있음' };
+    if (time < BOSS_TIME && scoreOf(kills) < BOSS_SCORE) return { ok: false, reason: '보스가 나오기 전에 끝난 기록에 보스가 있음' };
     // 조건 보스는 그 조건이 기록과 맞아야 한다. 프리즘 킹은 조건이 없다
     if (BOSS_RULES[boss.key] && !BOSS_RULES[boss.key]({ pierce, kills: total, lowHp })) return { ok: false, reason: `보스 조건을 채우지 않음: ${BOSSES[boss.key].name}` };
   } else if (time >= BOSS_TIME + 1) {
