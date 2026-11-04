@@ -13,7 +13,7 @@ const verifyGoogle = async credential => {
 };
 
 before(async () => {
-  const app = createApp({ store: createMemoryStore(), jwtSecret: 'test-secret', verifyGoogle, corsOrigins: [], adminUsernames: ['admin_tester'], requestsPerMinute: 10000 });
+  const app = createApp({ store: createMemoryStore(), jwtSecret: 'test-secret', verifyGoogle, corsOrigins: [], adminUsernames: ['admin_tester'], requestsPerMinute: 10000, loginsPerMinute: 10000 });
   server = app.listen(0);
   await new Promise(r => server.once('listening', r));
   base = `http://localhost:${server.address().port}/api`;
@@ -224,7 +224,10 @@ test('비밀번호 바꾸기: 지금 비밀번호가 맞아야 하고, 바꾼 �
   const a = await call('/signup', { body: { username: 'pw_a', password: 'secret12' } });
   assert.equal((await call('/password', { token: a.token, body: { current: 'wrong12', next: 'newsecret1' } })).status, 401);
   assert.equal((await call('/password', { token: a.token, body: { current: 'secret12', next: '123' } })).status, 400);
-  assert.equal((await call('/password', { token: a.token, body: { current: 'secret12', next: 'newsecret1' } })).ok, true);
+  const changed = await call('/password', { token: a.token, body: { current: 'secret12', next: 'newsecret1' } });
+  assert.equal(changed.ok, true);
+  assert.equal((await call('/me', { token: a.token })).status, 401); // 바꾸기 전 토큰은 끊긴다
+  assert.equal((await call('/me', { token: changed.token })).status, 200);
   assert.equal((await call('/login', { body: { username: 'pw_a', password: 'secret12' } })).status, 401);
   assert.ok((await call('/login', { body: { username: 'pw_a', password: 'newsecret1' } })).token);
   const guest = await call('/guest', { body: {} });
@@ -236,4 +239,15 @@ test('영웅별 점수는 따로 쌓인다', async () => {
   await call('/records', { token, body: goodRecord });
   const r = await call('/records', { token, body: goodRecord });
   assert.deepEqual(r.progress.scores, { sprout: 52 });
+});
+
+test('비밀번호를 받는 주소는 분당 횟수를 따로 제한한다', async () => {
+  const app = createApp({ store: createMemoryStore(), jwtSecret: 'test-secret', corsOrigins: [], loginsPerMinute: 2 });
+  const srv = app.listen(0);
+  await new Promise(r => srv.once('listening', r));
+  const login = () => fetch(`http://localhost:${srv.address().port}/api/login`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'nobody', password: 'secret12' }),
+  }).then(r => r.status);
+  assert.deepEqual([await login(), await login(), await login()], [401, 401, 429]);
+  srv.close();
 });

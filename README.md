@@ -40,6 +40,6 @@ python -m http.server 5176 -d web   # http://localhost:5176
 
 ## 테스트
 ```bash
-cd server && npm test               # API·계정 연동·기록 검증·성장·관리자·랭킹·프로필 20개
+cd server && npm test               # API·계정 연동·기록 검증·성장·관리자·랭킹·프로필·보안 21개
 node tests/balance-sim.mjs          # 봇이 몇 분에 쓰러지는지, 서버 검증을 통과하는지 (한 판 길이 점검)
 ```

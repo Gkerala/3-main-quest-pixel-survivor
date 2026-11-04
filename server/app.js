@@ -4,6 +4,7 @@ import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
+import { createHmac } from 'node:crypto';
 import { validateRecord, addToProgress, HEROES, GROWTH, todayKST, seasonRange } from '../web/js/rules.js';
 
 const USERNAME = /^[a-zA-Z0-9_]{3,20}$/;
@@ -27,15 +28,20 @@ const publicUser = u => ({
   progress: u.progress ?? {}, // 얻은 영웅, 영웅별 누적 점수, 도감
 });
 
-export function createApp({ store, jwtSecret, verifyGoogle, corsOrigins, adminUsernames = [], requestsPerMinute = 60 }) {
+export function createApp({ store, jwtSecret, verifyGoogle, corsOrigins, adminUsernames = [], requestsPerMinute = 60, loginsPerMinute = 10 }) {
   if (!jwtSecret) throw new Error('JWT_SECRET이 필요합니다');
   const app = express();
   app.set('trust proxy', 1); // Render 프록시 한 겹 뒤의 실제 IP로 요청 횟수를 센다
   app.use(cors({ origin: corsOrigins }));
   app.use(express.json({ limit: '10kb' }));
   app.use('/api', rateLimit({ windowMs: 60_000, limit: requestsPerMinute }));
+  // 비밀번호를 받는 주소는 더 적게. 비밀번호 대입을 늦춘다
+  const loginLimit = rateLimit({ windowMs: 60_000, limit: loginsPerMinute });
 
-  const sign = user => jwt.sign({ sub: user.id }, jwtSecret, { expiresIn: TOKEN_LIFE });
+  // 비밀번호 도장: 비밀번호를 바꾸면 값이 달라져서 그 전에 받은 토큰이 모두 무효가 된다.
+  // 해시를 그대로 넣지 않고 서버 비밀값으로 한 번 더 감싼다 (토큰 내용은 누구나 읽을 수 있다)
+  const passwordStamp = user => user.passwordHash && createHmac('sha256', jwtSecret).update(user.passwordHash).digest('base64url').slice(0, 16);
+  const sign = user => jwt.sign({ sub: user.id, pw: passwordStamp(user) || undefined }, jwtSecret, { expiresIn: TOKEN_LIFE });
   // 관리자는 모든 영웅이 열려 있고 최소 2단계다. 저장하지 않고 보여 줄 때만 더해서, 목록에서 빼면 바로 원래대로 돌아간다
   const isAdmin = user => !!user.username && adminUsernames.includes(user.username);
   const withAdmin = (user, progress) => (isAdmin(user) ? {
@@ -51,9 +57,9 @@ export function createApp({ store, jwtSecret, verifyGoogle, corsOrigins, adminUs
     const header = req.get('authorization');
     if (!header) return null;
     try {
-      const { sub } = jwt.verify(header.replace(/^Bearer /, ''), jwtSecret);
+      const { sub, pw } = jwt.verify(header.replace(/^Bearer /, ''), jwtSecret);
       const user = await store.findUserById(sub);
-      if (user) return user;
+      if (user && pw === (passwordStamp(user) || undefined)) return user;
     } catch { /* 아래에서 401 */ }
     throw new HttpError(401, '다시 로그인해 주세요');
   }
@@ -80,7 +86,7 @@ export function createApp({ store, jwtSecret, verifyGoogle, corsOrigins, adminUs
   });
 
   // 회원가입. 게스트 토큰을 같이 보내면 그 게스트 계정을 회원으로 바꾼다(기록이 그대로 따라온다)
-  app.post('/api/signup', async (req, res) => {
+  app.post('/api/signup', loginLimit, async (req, res) => {
     const { username, password } = readCredentials(req.body);
     if (await store.findUserByUsername(username)) throw new HttpError(409, '이미 있는 아이디입니다');
     const passwordHash = await bcrypt.hash(password, 10);
@@ -92,7 +98,7 @@ export function createApp({ store, jwtSecret, verifyGoogle, corsOrigins, adminUs
     reply(res, user);
   });
 
-  app.post('/api/login', async (req, res) => {
+  app.post('/api/login', loginLimit, async (req, res) => {
     const { username, password } = readCredentials(req.body);
     const user = await store.findUserByUsername(username);
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) throw new HttpError(401, '아이디 또는 비밀번호가 틀립니다');
@@ -164,15 +170,15 @@ export function createApp({ store, jwtSecret, verifyGoogle, corsOrigins, adminUs
     res.json({ user: shownUser(await store.updateUser(user.id, { progress: { ...user.progress, nickname } })) });
   });
 
-  // 비밀번호 바꾸기. 지금 비밀번호를 확인한다
-  app.post('/api/password', async (req, res) => {
+  // 비밀번호 바꾸기. 지금 비밀번호를 확인한다. 다른 기기의 토큰은 끊기고, 이 기기는 새 토큰을 받는다
+  app.post('/api/password', loginLimit, async (req, res) => {
     const user = await requireUser(req);
     if (!user.passwordHash) throw new HttpError(400, '비밀번호가 없는 계정입니다');
     const { current, next } = req.body ?? {};
     if (typeof next !== 'string' || next.length < MIN_PASSWORD || next.length > MAX_PASSWORD) throw new HttpError(400, `비밀번호는 ${MIN_PASSWORD}~${MAX_PASSWORD}자입니다`);
     if (typeof current !== 'string' || !(await bcrypt.compare(current, user.passwordHash))) throw new HttpError(401, '지금 비밀번호가 틀립니다');
-    await store.updateUser(user.id, { passwordHash: await bcrypt.hash(next, 10) });
-    res.json({ ok: true });
+    const updated = await store.updateUser(user.id, { passwordHash: await bcrypt.hash(next, 10) });
+    res.json({ ok: true, token: sign(updated) });
   });
 
   // 내 기록 보기
