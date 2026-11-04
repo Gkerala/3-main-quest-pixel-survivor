@@ -3,7 +3,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createApp } from './app.js';
 import { createMemoryStore } from './store-memory.js';
-import { tierOf } from '../web/js/rules.js';
+import { tierOf, HEROES } from '../web/js/rules.js';
 
 let server, base;
 // 가짜 구글: 'google:<번호>'를 그 번호의 구글 계정으로 본다
@@ -149,15 +149,17 @@ test('성장 단계는 3단계까지다', () => {
   assert.deepEqual([0, 11999, 12000, 49999, 50000, 999999].map(tierOf), [1, 1, 2, 2, 3, 3]);
 });
 
-test('관리자는 모든 영웅이 열려 있고, 일반 회원은 아니다', async () => {
+test('관리자는 모든 영웅이 열려 있고 2단계부터다. 일반 회원은 아니다', async () => {
   const admin = await call('/signup', { body: { username: 'admin_tester', password: 'secret12' } });
   assert.deepEqual(admin.user.progress.heroes, ['frost', 'magma', 'shade']);
   const played = await call('/records', { token: admin.token, body: { ...goodRecord, hero: 'shade' } });
-  assert.deepEqual([played.valid, played.progress.heroes.length, played.progress.scores.shade], [true, 3, 26]);
+  assert.deepEqual([played.valid, played.progress.heroes.length], [true, 3]);
+  assert.deepEqual(HEROES.map(h => tierOf(played.progress.scores[h])), [2, 2, 2, 2]);
   assert.equal((await call('/me', { token: admin.token })).user.progress.heroes.length, 3);
 
   const normal = await call('/signup', { body: { username: 'not_admin', password: 'secret12' } });
   assert.equal(normal.user.progress.heroes, undefined);
+  assert.equal(tierOf(normal.user.progress.scores?.sprout ?? 0), 1);
   const refused = await call('/records', { token: normal.token, body: { ...goodRecord, hero: 'shade' } });
   assert.equal(refused.valid, false);
 });

@@ -19,7 +19,7 @@ export const BOSS_SCORE = 10000; // 처치 점수가 이만큼이면 10분 전�
 export const BOSSES = {
   frost: { name: '서리 슬라임', score: 500, hero: true },
   magma: { name: '용암 슬라임', score: 500, hero: true },
-  shade: { name: '그림자 슬라임', score: 500, hero: true },
+  shade: { name: '번개 슬라임', score: 500, hero: true },
   prism: { name: '프리즘 킹', score: 300, hero: false },
 };
 // 보스 조건. s = { pierce: 관통 강화 횟수, kills: 처치 수, lowHp: 체력 20% 아래로 떨어진 적이 있나 }

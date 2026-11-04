@@ -47,7 +47,7 @@ export const HERO_DEFS = {
     ],
   },
   shade: {
-    name: '그림자 슬라임', weapon: 'bite',
+    name: '번개 슬라임', weapon: 'bite',
     base: { damage: 34, cooldown: 0.45, range: 34, arc: 0.8 },
     cards: [
       { id: 'reach', grade: 'C', tier: 1, name: '물기 범위', desc: '20% 더 멀리 문다', max: 4, apply: p => { p.range *= 1.2; } },

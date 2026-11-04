@@ -4,7 +4,7 @@ import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
-import { validateRecord, addToProgress, HEROES } from '../web/js/rules.js';
+import { validateRecord, addToProgress, HEROES, GROWTH } from '../web/js/rules.js';
 
 const USERNAME = /^[a-zA-Z0-9_]{3,20}$/;
 const MIN_PASSWORD = 6;
@@ -32,9 +32,13 @@ export function createApp({ store, jwtSecret, verifyGoogle, corsOrigins, adminUs
   app.use('/api', rateLimit({ windowMs: 60_000, limit: 60 }));
 
   const sign = user => jwt.sign({ sub: user.id }, jwtSecret, { expiresIn: TOKEN_LIFE });
-  // 관리자는 모든 영웅이 열려 있다. 저장하지 않고 보여 줄 때만 더해서, 목록에서 빼면 바로 원래대로 돌아간다
+  // 관리자는 모든 영웅이 열려 있고 최소 2단계다. 저장하지 않고 보여 줄 때만 더해서, 목록에서 빼면 바로 원래대로 돌아간다
   const isAdmin = user => !!user.username && adminUsernames.includes(user.username);
-  const withAdmin = (user, progress) => (isAdmin(user) ? { ...progress, heroes: HEROES.filter(h => h !== 'sprout') } : progress);
+  const withAdmin = (user, progress) => (isAdmin(user) ? {
+    ...progress,
+    heroes: HEROES.filter(h => h !== 'sprout'),
+    scores: Object.fromEntries(HEROES.map(h => [h, Math.max(progress.scores?.[h] ?? 0, GROWTH[1])])),
+  } : progress);
   const shownUser = user => publicUser({ ...user, progress: withAdmin(user, user.progress ?? {}) });
   const reply = async (res, user) => res.json({ token: sign(user), user: shownUser(user) });
 

@@ -378,7 +378,7 @@ export const HEROES = [
     ], { at: [12, 12] }),
   },
   {
-    key: 'shade', name: '그림자 슬라임', role: '근접형', attack: '그림자 물기: 앞으로 튀어 나가며 반달 모양으로 물어뜯는다',
+    key: 'shade', name: '번개 슬라임', role: '근접형', attack: '그림자 물기: 앞으로 튀어 나가며 반달 모양으로 물어뜯는다',
     anims: slimeSet('shade', body => [
       body({ eyes: 'angry', sx: 1.1, sy: 0.85, glow: 1 }),
       [...body({ eyes: 'angry', dx: 2, mouth: 'teeth', sx: 1.1, sy: 0.9 }), { g: shadowBite(0), x: 12, y: 0 }],
@@ -403,7 +403,7 @@ export const STAGE_NAMES = {
   sprout: ['새싹 슬라임', '꽃망울 슬라임', '숲의 아이'],
   frost: ['서리 슬라임', '눈꽃 슬라임', '겨울의 아이'],
   magma: ['용암 슬라임', '불꽃 슬라임', '불의 아이'],
-  shade: ['그림자 슬라임', '뿔 그림자 슬라임', '밤의 아이'],
+  shade: ['번개 슬라임', '번개 구체 슬라임', '번개의 아이'],
 };
 export const GROWTH = Object.entries(STAGE_NAMES).map(([key, names]) => ({
   key, name: names[0], role: '성장 단계', attack: names.join(' → '),
@@ -434,7 +434,7 @@ export const HERO_BOSSES = [
     [{ g: fireRing(15, 1), x: 4, y: 10 }, ...body({ eyes: 'angry', mouth: 'open' })],
     [{ g: fireRing(19, 2), x: 4, y: 10 }, ...body({})],
   ]),
-  bossOf('shade', '그림자 슬라임', '그림자 삼키기: 크게 입을 벌리고 앞을 두 번 물어뜯는다', body => [
+  bossOf('shade', '번개 슬라임', '그림자 삼키기: 크게 입을 벌리고 앞을 두 번 물어뜯는다', body => [
     body({ bw: 28, bh: 18, eyes: 'angry' }),
     [...body({ bw: 30, bh: 18, eyes: 'angry', mouth: 'teeth' }), { g: shadowBite(0), x: 32, y: 14 }],
     [...body({ bw: 30, bh: 18, eyes: 'angry', mouth: 'teeth' }), { g: shadowBite(1), x: 32, y: 14 }],
