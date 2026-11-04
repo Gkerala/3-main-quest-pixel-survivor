@@ -35,4 +35,7 @@ export const api = {
   google: credential => call('/api/google', { credential }),
   submit: record => call('/api/records', record),
   me: () => call('/api/me'),
+  rankings: period => call(`/api/rankings?period=${period}`),
+  setNickname: nickname => call('/api/profile', { nickname }),
+  setPassword: (current, next) => call('/api/password', { current, next }),
 };

@@ -4,12 +4,14 @@ import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
-import { validateRecord, addToProgress, HEROES, GROWTH } from '../web/js/rules.js';
+import { validateRecord, addToProgress, HEROES, GROWTH, todayKST, seasonRange } from '../web/js/rules.js';
 
 const USERNAME = /^[a-zA-Z0-9_]{3,20}$/;
 const MIN_PASSWORD = 6;
 const MAX_PASSWORD = 72; // bcrypt가 72바이트까지만 본다
 const TOKEN_LIFE = '30d';
+const NICKNAME = /^[가-힣a-zA-Z0-9_]{2,12}$/;
+const RANK_LIMIT = 100;
 
 class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -18,18 +20,20 @@ class HttpError extends Error {
 // 화면에 보낼 유저 정보. 비밀번호 해시와 구글 고유번호는 보내지 않는다
 const publicUser = u => ({
   id: u.id,
-  name: u.username ?? (u.googleSub ? u.name : `게스트${u.id}`),
+  name: u.progress?.nickname ?? u.username ?? (u.googleSub ? u.name : `게스트${u.id}`),
+  username: u.username,
+  hasPassword: !!u.passwordHash,
   status: u.status,
   progress: u.progress ?? {}, // 얻은 영웅, 영웅별 누적 점수, 도감
 });
 
-export function createApp({ store, jwtSecret, verifyGoogle, corsOrigins, adminUsernames = [] }) {
+export function createApp({ store, jwtSecret, verifyGoogle, corsOrigins, adminUsernames = [], requestsPerMinute = 60 }) {
   if (!jwtSecret) throw new Error('JWT_SECRET이 필요합니다');
   const app = express();
   app.set('trust proxy', 1); // Render 프록시 한 겹 뒤의 실제 IP로 요청 횟수를 센다
   app.use(cors({ origin: corsOrigins }));
   app.use(express.json({ limit: '10kb' }));
-  app.use('/api', rateLimit({ windowMs: 60_000, limit: 60 }));
+  app.use('/api', rateLimit({ windowMs: 60_000, limit: requestsPerMinute }));
 
   const sign = user => jwt.sign({ sub: user.id }, jwtSecret, { expiresIn: TOKEN_LIFE });
   // 관리자는 모든 영웅이 열려 있고 최소 2단계다. 저장하지 않고 보여 줄 때만 더해서, 목록에서 빼면 바로 원래대로 돌아간다
@@ -133,6 +137,42 @@ export function createApp({ store, jwtSecret, verifyGoogle, corsOrigins, adminUs
       await store.updateUser(user.id, { progress });
     }
     res.status(201).json({ valid: check.ok, reason: check.reason, score, best: await store.bestScore(user.id), progress: withAdmin(user, progress), unlocked });
+  });
+
+  // 랭킹. 일간은 오늘 패턴, 시즌은 이번 달. 유저당 한 줄, 게스트·버그 기록·관리자는 뺀다
+  // 이름은 닉네임 또는 아이디만 보여 준다. 구글 실명은 공개하지 않는다
+  app.get('/api/rankings', async (req, res) => {
+    const period = req.query.period ?? 'daily';
+    if (period !== 'daily' && period !== 'season') throw new HttpError(400, '랭킹 종류가 틀립니다');
+    const today = todayKST();
+    const { from, to } = period === 'daily' ? { from: today, to: today } : seasonRange(today);
+    const me = await currentUser(req).catch(() => null);
+    const rows = await store.ranking({ from, to, limit: RANK_LIMIT, userId: me?.id ?? null, excludeUsernames: adminUsernames });
+    const show = r => ({ rank: r.rank, name: r.nickname ?? r.username ?? `플레이어${r.userId}`, score: r.score, kills: r.kills, plays: r.plays, hero: r.hero });
+    res.json({ period, from, to, top: rows.filter(r => r.rank <= RANK_LIMIT).map(show), me: (r => (r ? show(r) : null))(rows.find(r => r.userId === me?.id)) });
+  });
+
+  // 닉네임 바꾸기. 회원만, 다른 사람의 닉네임·아이디와 겹치면 안 된다
+  // ponytail: 동시에 같은 이름을 고르면 겹칠 수 있다. 문제가 되면 DB에 유일 제약을 건다
+  app.post('/api/profile', async (req, res) => {
+    const user = await requireUser(req);
+    if (user.status === 'guest') throw new HttpError(403, '닉네임은 회원만 정할 수 있습니다');
+    const nickname = req.body?.nickname;
+    if (typeof nickname !== 'string' || !NICKNAME.test(nickname)) throw new HttpError(400, '닉네임은 한글·영문·숫자·_ 2~12자입니다');
+    const taken = await store.findUserByNickname(nickname) ?? await store.findUserByUsername(nickname);
+    if (taken && taken.id !== user.id) throw new HttpError(409, '이미 쓰는 이름입니다');
+    res.json({ user: shownUser(await store.updateUser(user.id, { progress: { ...user.progress, nickname } })) });
+  });
+
+  // 비밀번호 바꾸기. 지금 비밀번호를 확인한다
+  app.post('/api/password', async (req, res) => {
+    const user = await requireUser(req);
+    if (!user.passwordHash) throw new HttpError(400, '비밀번호가 없는 계정입니다');
+    const { current, next } = req.body ?? {};
+    if (typeof next !== 'string' || next.length < MIN_PASSWORD || next.length > MAX_PASSWORD) throw new HttpError(400, `비밀번호는 ${MIN_PASSWORD}~${MAX_PASSWORD}자입니다`);
+    if (typeof current !== 'string' || !(await bcrypt.compare(current, user.passwordHash))) throw new HttpError(401, '지금 비밀번호가 틀립니다');
+    await store.updateUser(user.id, { passwordHash: await bcrypt.hash(next, 10) });
+    res.json({ ok: true });
   });
 
   // 내 기록 보기

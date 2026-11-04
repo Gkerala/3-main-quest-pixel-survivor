@@ -76,6 +76,14 @@ export const scoreOf = kills =>
 export const todayKST = (now = Date.now()) =>
   new Date(now + 9 * 3600 * 1000).toISOString().slice(0, 10);
 
+// 시즌은 한국 시간 달력으로 한 달이다. 그달 첫날과 마지막 날을 돌려준다
+export function seasonRange(date) {
+  const [y, m] = date.split('-').map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const month = `${y}-${String(m).padStart(2, '0')}`;
+  return { from: `${month}-01`, to: `${month}-${String(last).padStart(2, '0')}` };
+}
+
 export function seededRandom(text) {
   let a = 0;
   for (const ch of text) a = (Math.imul(a ^ ch.charCodeAt(0), 2654435761) + 1) | 0;
@@ -132,5 +140,5 @@ export function addToProgress(progress = {}, { hero = 'sprout', kills, boss }, s
     bosses[boss.key] = (bosses[boss.key] ?? 0) + 1;
     if (BOSSES[boss.key].hero && !heroes.includes(boss.key)) unlocked = boss.key;
   }
-  return { progress: { heroes: unlocked ? [...heroes, unlocked] : heroes, scores, dex: { kills: dexKills, bosses } }, unlocked };
+  return { progress: { ...progress, heroes: unlocked ? [...heroes, unlocked] : heroes, scores, dex: { kills: dexKills, bosses } }, unlocked };
 }

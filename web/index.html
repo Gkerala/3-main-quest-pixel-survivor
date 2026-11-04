@@ -53,10 +53,10 @@
       <button id="btn-play" class="btn primary big">게임 시작</button>
     </div>
     <nav class="menu">
-      <button class="btn tile" data-soon>랭킹</button>
-      <button class="btn tile" data-soon>프로필 설정</button>
+      <button id="btn-rank" class="btn tile">랭킹</button>
+      <button id="btn-profile" class="btn tile">프로필 설정</button>
       <button class="btn tile" data-soon>상점</button>
-      <button class="btn tile" data-soon>환경설정</button>
+      <button id="btn-settings" class="btn tile">환경설정</button>
       <button id="btn-dex" class="btn tile">도감</button>
     </nav>
     <p class="hint keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 로 움직이고, 마우스 쪽으로 자동 공격합니다. <kbd>ESC</kbd> 일시정지, 마우스 휠로 확대·축소.</p>
@@ -113,9 +113,59 @@
 </main>
 <dialog id="dex" class="dex">
   <h2>도감</h2>
-  <p class="hint">처치한 적과 이긴 보스만 모습이 보입니다.</p>
+  <p class="hint">처치한 적과 이긴 보스만 모습이 보입니다. <b id="dex-allies"></b></p>
   <div id="dex-list" class="dex-list"></div>
   <button id="dex-close" class="btn">닫기</button>
+</dialog>
+<dialog id="rank" class="dex">
+  <h2>랭킹</h2>
+  <div class="tabs" role="tablist">
+    <button id="rank-daily" class="btn small" role="tab">오늘</button>
+    <button id="rank-season" class="btn small" role="tab">시즌 (이번 달)</button>
+  </div>
+  <p id="rank-info" class="hint" role="status"></p>
+  <div class="rank-scroll">
+    <table class="rank-table">
+      <thead><tr><th>순위</th><th>이름</th><th>영웅</th><th>최고 점수</th><th>누적 처치</th><th>판 수</th></tr></thead>
+      <tbody id="rank-rows"></tbody>
+    </table>
+  </div>
+  <table class="rank-table mine"><tbody id="rank-me"></tbody></table>
+  <button id="rank-close" class="btn">닫기</button>
+</dialog>
+<dialog id="profile" class="dex">
+  <h2>프로필 설정</h2>
+  <dl class="profile-info">
+    <dt>이름</dt><dd id="pf-name"></dd>
+    <dt>계정</dt><dd id="pf-status"></dd>
+    <dt>최고 점수</dt><dd id="pf-best">…</dd>
+  </dl>
+  <form id="pf-nick" class="stack">
+    <label>닉네임 <input id="pf-nick-input" maxlength="12" required></label>
+    <p class="hint">한글·영문·숫자·_ 2~12자. 랭킹에 이 이름이 보입니다.</p>
+    <button class="btn">닉네임 저장</button>
+  </form>
+  <form id="pf-pw" class="stack">
+    <label>지금 비밀번호 <input id="pf-pw-now" type="password" autocomplete="current-password" required></label>
+    <label>새 비밀번호 <input id="pf-pw-new" type="password" autocomplete="new-password" minlength="6" maxlength="72" required></label>
+    <button class="btn">비밀번호 변경</button>
+  </form>
+  <p id="pf-guest" class="hint">게스트는 닉네임을 정할 수 없고 랭킹에도 집계되지 않습니다. 대기 화면의 "회원으로 저장"으로 가입하면 기록이 이어집니다.</p>
+  <p id="pf-msg" class="hint" role="status"></p>
+  <button id="profile-close" class="btn">닫기</button>
+</dialog>
+<dialog id="options" class="dex">
+  <h2>환경설정</h2>
+  <p class="hint">이 브라우저에만 저장됩니다.</p>
+  <div class="stack">
+    <label class="check"><input id="opt-aim" type="checkbox"> 조준선 보기</label>
+    <label class="check"><input id="opt-threat" type="checkbox"> 게임 중 위협도 보기</label>
+    <label class="check"><input id="opt-backdrop" type="checkbox"> 대기 화면 배경 움직이기</label>
+    <label>게임 확대 배율 <output id="opt-zoom-value"></output>
+      <input id="opt-zoom" type="range" min="0.8" max="2" step="0.1">
+    </label>
+  </div>
+  <button id="options-close" class="btn">닫기</button>
 </dialog>
 <div id="toast" role="status" hidden></div>
 <script src="https://accounts.google.com/gsi/client" async></script>

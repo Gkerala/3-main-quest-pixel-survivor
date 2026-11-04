@@ -6,6 +6,7 @@ import { GOOGLE_CLIENT_ID } from './config.js';
 import { startBackdrop } from './backdrop.js';
 import { gameArt, STAGE_NAMES } from './slime-art.js';
 import { heroArt, loadHeroSprites } from './hero-sprites.js';
+import { settings, saveSetting } from './settings.js';
 
 const $ = id => document.getElementById(id);
 const STATUS = { guest: '게스트', web: '웹 회원', google: '구글 회원', both: '웹 + 구글' };
@@ -25,7 +26,7 @@ const backdrop = startBackdrop($('backdrop'));
 function show(name) {
   for (const s of document.querySelectorAll('.screen')) s.hidden = s.id !== `screen-${name}`;
   document.body.classList.toggle('playing', name === 'game');
-  name === 'game' ? backdrop.pause() : backdrop.resume();
+  name === 'game' || !settings.backdrop ? backdrop.pause() : backdrop.resume();
 }
 
 // 새 패턴(한국 시간 자정)까지 남은 시간
@@ -43,6 +44,12 @@ function toast(text) {
   t.hidden = false;
   clearTimeout(toast.timer);
   toast.timer = setTimeout(() => { t.hidden = true; }, 2200);
+}
+
+// 대화창: 안쪽 닫기 버튼과 여는 버튼을 잇는다
+function dialogButtons(id, onOpen) {
+  $(`btn-${id === 'options' ? 'settings' : id}`).onclick = () => { onOpen(); $(id).showModal(); };
+  $(`${id}-close`).onclick = () => $(id).close();
 }
 
 function enterLobby(u) {
@@ -127,8 +134,96 @@ function renderDex() {
     return d;
   }));
 }
-$('btn-dex').onclick = () => { renderDex(); $('dex').showModal(); };
+$('btn-dex').onclick = () => {
+  renderDex();
+  $('dex-allies').textContent = `동료 ${user.progress?.heroes?.length ?? 0} / ${HEROES.length - 1}`;
+  $('dex').showModal();
+};
 $('dex-close').onclick = () => $('dex').close();
+
+// 랭킹: 탑 100과 아래에 내 기록. 영웅 칸은 처음 이름으로 보여 준다
+function rankRow(r, cells = [r.rank, r.name, STAGE_NAMES[r.hero]?.[0] ?? '-', r.score.toLocaleString(), r.kills.toLocaleString(), r.plays]) {
+  const tr = document.createElement('tr');
+  tr.append(...cells.map(text => Object.assign(document.createElement('td'), { textContent: text })));
+  return tr;
+}
+let rankLoad = 0;
+async function showRanking(period) {
+  const mine = ++rankLoad;
+  $('rank-daily').setAttribute('aria-selected', String(period === 'daily'));
+  $('rank-season').setAttribute('aria-selected', String(period === 'season'));
+  $('rank-info').textContent = '불러오는 중…';
+  $('rank-rows').replaceChildren();
+  $('rank-me').replaceChildren();
+  try {
+    const r = await api.rankings(period);
+    if (mine !== rankLoad) return; // 그 사이 다른 탭을 눌렀다
+    const range = period === 'daily' ? r.from : `${r.from} ~ ${r.to}`;
+    $('rank-info').textContent = r.top.length ? `${range} · 유저당 최고 기록 1줄` : `${range} · 아직 기록이 없습니다`;
+    $('rank-rows').replaceChildren(...r.top.map(row => rankRow(row)));
+    const none = user.status === 'guest' ? '게스트 기록은 랭킹에 집계되지 않습니다' : '이 기간의 내 기록이 없습니다';
+    if (r.me) $('rank-me').replaceChildren(rankRow(r.me));
+    else { const td = Object.assign(document.createElement('td'), { textContent: none }); $('rank-me').replaceChildren(document.createElement('tr')); $('rank-me').firstChild.append(td); }
+  } catch (e) {
+    if (mine === rankLoad) $('rank-info').textContent = e.message;
+  }
+}
+$('rank-daily').onclick = () => showRanking('daily');
+$('rank-season').onclick = () => showRanking('season');
+dialogButtons('rank', () => showRanking('daily'));
+
+// 프로필 설정. 대화창 위에는 토스트가 가려지므로 안쪽 줄에 알린다
+const pfMsg = text => { $('pf-msg').textContent = text; };
+function fillProfile() {
+  const member = user.status !== 'guest';
+  $('pf-name').textContent = user.name;
+  $('pf-status').textContent = user.username ? `${STATUS[user.status]} (아이디 ${user.username})` : STATUS[user.status];
+  $('pf-nick').hidden = !member;
+  $('pf-pw').hidden = !user.hasPassword;
+  $('pf-guest').hidden = member;
+  $('pf-nick-input').value = user.progress?.nickname ?? '';
+}
+dialogButtons('profile', () => {
+  pfMsg('');
+  fillProfile();
+  $('pf-best').textContent = '…';
+  api.me().then(r => { $('pf-best').textContent = r.best.toLocaleString(); }, () => { $('pf-best').textContent = '-'; });
+});
+$('pf-nick').onsubmit = async e => {
+  e.preventDefault();
+  try {
+    const r = await api.setNickname($('pf-nick-input').value.trim());
+    user = r.user;
+    $('profile-name').textContent = user.name;
+    fillProfile();
+    pfMsg('닉네임을 저장했습니다');
+  } catch (err) { pfMsg(err.message); }
+};
+$('pf-pw').onsubmit = async e => {
+  e.preventDefault();
+  try {
+    await api.setPassword($('pf-pw-now').value, $('pf-pw-new').value);
+    pfMsg('비밀번호를 바꿨습니다');
+  } catch (err) { pfMsg(err.message); }
+  $('pf-pw-now').value = '';
+  $('pf-pw-new').value = '';
+};
+
+// 환경설정
+const zoomText = v => `${Number(v).toFixed(1)}배`;
+function applyThreat() { $('hud-threat').parentElement.hidden = !settings.showThreat; }
+applyThreat();
+dialogButtons('options', () => {
+  $('opt-aim').checked = settings.aimLine;
+  $('opt-threat').checked = settings.showThreat;
+  $('opt-backdrop').checked = settings.backdrop;
+  $('opt-zoom').value = settings.zoom;
+  $('opt-zoom-value').textContent = zoomText(settings.zoom);
+});
+$('opt-aim').onchange = e => saveSetting('aimLine', e.target.checked);
+$('opt-threat').onchange = e => { saveSetting('showThreat', e.target.checked); applyThreat(); };
+$('opt-backdrop').onchange = e => { saveSetting('backdrop', e.target.checked); e.target.checked ? backdrop.resume() : backdrop.pause(); };
+$('opt-zoom').oninput = e => { saveSetting('zoom', Number(e.target.value)); $('opt-zoom-value').textContent = zoomText(e.target.value); };
 
 // 결과 화면의 보스 한 줄
 function bossNote(boss, r) {
@@ -164,7 +259,7 @@ function setupGoogle() {
 }
 setupGoogle();
 
-// 대기 화면: 랭킹·프로필·상점·환경설정·도감은 버튼만 (PRD Won't)
+// 상점은 아직 버튼만 있다
 for (const b of document.querySelectorAll('[data-soon]')) b.onclick = () => toast(`${b.textContent}: 다음 버전에서 열립니다`);
 $('btn-logout').onclick = () => { user = null; token.set(null); show('start'); };
 // 게스트 토큰을 지우지 않고 시작 화면으로. 여기서 가입하거나 구글을 연동하면 지금 계정이 회원이 된다
@@ -176,7 +271,8 @@ async function play() {
   show('game');
   const hud = { time: $('hud-time'), score: $('hud-score'), level: $('hud-level'), xp: $('hud-xp'), hp: $('hud-hp'), threat: $('hud-threat'),
     boss: $('hud-boss'), bossName: $('hud-boss-name'), bossHp: $('hud-boss-hp') };
-  const record = await startGame($('game-canvas'), hud, todayKST(), { choose, pause, hero, tier: tierOf(scoreFor(hero)) });
+  const record = await startGame($('game-canvas'), hud, todayKST(), { choose, pause, hero, tier: tierOf(scoreFor(hero)),
+    aimLine: settings.aimLine, startZoom: settings.zoom, onZoom: z => saveSetting('zoom', Math.round(z * 10) / 10) });
   // 일시정지에서 그만두면 기록을 보내지 않는다
   if (record.aborted === 'restart') return play();
   if (record.aborted === 'lobby') return enterLobby(user);

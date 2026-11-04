@@ -1,5 +1,6 @@
 // 한 판. startGame이 끝나면 { time, kills, hero, boss, pierce, lowHp }로 resolve 된다.
 // options.choose(cards): 레벨업 카드 3장 중 하나를 Promise로 돌려준다 (화면이 띄운다)
+// options.aimLine / startZoom / onZoom: 환경설정 값 (조준선, 처음 확대 배율, 휠로 바꾼 배율을 알려 줄 함수)
 // options.hero / tier: 고른 영웅과 성장 단계(1~3). options.bot: 테스트용. 마우스 대신 가장 가까운 몹을 조준한다
 import { MOBS, MAX_TIME, FIRST_SPAWN, spawnInterval, hpScale, dmgScale, unlocked, scoreOf, seededRandom, threatOf,
   BOSS_TIME, BOSS_SCORE, BOSSES, BOSS_RULES } from './rules.js';
@@ -35,7 +36,8 @@ const FX_COLORS = { fire: ['#ff8a2a', '#fff07a'], flare: ['#fff4c0', '#ffffff'],
 const angleGap = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
 
 // options.pause(): ESC를 누르면 부른다. 'resume' | 'restart' | 'lobby'를 Promise로 돌려준다. 그만두면 { aborted }로 끝난다
-export function startGame(canvas, hud, seedText, { choose, pause, bot = false, random = Math.random, hero = 'sprout', tier = 1 } = {}) {
+export function startGame(canvas, hud, seedText, { choose, pause, bot = false, random = Math.random, hero = 'sprout', tier = 1, aimLine = true, startZoom, onZoom } = {}) {
+  if (startZoom) zoom = Math.min(ZOOM.max, Math.max(ZOOM.min, startZoom));
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = false;
   const DEF = HERO_DEFS[hero];
@@ -56,6 +58,7 @@ export function startGame(canvas, hud, seedText, { choose, pause, bot = false, r
     e.preventDefault();
     zoom = Math.min(ZOOM.max, Math.max(ZOOM.min, zoom * (e.deltaY < 0 ? ZOOM.step : 1 / ZOOM.step)));
     applyZoom();
+    onZoom?.(zoom);
   };
   const onKey = e => {
     if (e.code === 'Escape' && e.type === 'keydown' && pause && !paused && !choosing && p.hp > 0) return pauseGame();
@@ -389,7 +392,7 @@ export function startGame(canvas, hud, seedText, { choose, pause, bot = false, r
     ctx.globalAlpha = 1;
     // 조준선: 마우스 방향을 짧게 보여 준다
     ctx.fillStyle = '#e8b04a';
-    for (let r = 14; r <= 26; r += 4) ctx.fillRect(Math.round(vw / 2 + Math.cos(aim) * r), Math.round(vh / 2 + Math.sin(aim) * r), 1, 1);
+    if (aimLine) for (let r = 14; r <= 26; r += 4) ctx.fillRect(Math.round(vw / 2 + Math.cos(aim) * r), Math.round(vh / 2 + Math.sin(aim) * r), 1, 1);
   }
 
   function artOf(m) { return m.boss ? ART.bosses[m.type] : ART.mobs[m.type]; }

@@ -3,7 +3,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createApp } from './app.js';
 import { createMemoryStore } from './store-memory.js';
-import { tierOf, HEROES } from '../web/js/rules.js';
+import { tierOf, HEROES, seasonRange } from '../web/js/rules.js';
 
 let server, base;
 // 가짜 구글: 'google:<번호>'를 그 번호의 구글 계정으로 본다
@@ -13,7 +13,7 @@ const verifyGoogle = async credential => {
 };
 
 before(async () => {
-  const app = createApp({ store: createMemoryStore(), jwtSecret: 'test-secret', verifyGoogle, corsOrigins: [], adminUsernames: ['admin_tester'] });
+  const app = createApp({ store: createMemoryStore(), jwtSecret: 'test-secret', verifyGoogle, corsOrigins: [], adminUsernames: ['admin_tester'], requestsPerMinute: 10000 });
   server = app.listen(0);
   await new Promise(r => server.once('listening', r));
   base = `http://localhost:${server.address().port}/api`;
@@ -162,6 +162,73 @@ test('관리자는 모든 영웅이 열려 있고 2단계부터다. 일반 회�
   assert.equal(tierOf(normal.user.progress.scores?.sprout ?? 0), 1);
   const refused = await call('/records', { token: normal.token, body: { ...goodRecord, hero: 'shade' } });
   assert.equal(refused.valid, false);
+});
+
+test('랭킹: 유저당 한 줄, 점수순. 게스트·버그 기록·관리자는 빠지고 내 줄을 돌려준다', async () => {
+  const a = await call('/signup', { body: { username: 'rank_a', password: 'secret12' } });
+  const b = await call('/signup', { body: { username: 'rank_b', password: 'secret12' } });
+  const guest = await call('/guest', { body: {} });
+  const admin = await call('/login', { body: { username: 'admin_tester', password: 'secret12' } });
+  const bug = { time: 1, kills: { golem: 1 } };
+  await call('/records', { token: a.token, body: { time: 590, kills: { slime: 500, bat: 50 } } }); // 650점
+  await call('/records', { token: a.token, body: goodRecord }); // 26점: 최고 점수에 안 들어간다
+  await call('/records', { token: b.token, body: { time: 590, kills: { slime: 300 } } }); // 300점
+  await call('/records', { token: b.token, body: bug });
+  await call('/records', { token: guest.token, body: { time: 590, kills: { slime: 900 } } });
+  await call('/records', { token: admin.token, body: { time: 590, kills: { slime: 900 } } });
+
+  const daily = await call('/rankings?period=daily', { token: b.token });
+  const names = daily.top.map(r => r.name);
+  assert.equal(names.includes('admin_tester'), false);
+  assert.equal(names.filter(n => n === 'rank_a').length, 1);
+  const rowA = daily.top.find(r => r.name === 'rank_a'), rowB = daily.top.find(r => r.name === 'rank_b');
+  assert.deepEqual([rowA.score, rowA.kills, rowA.plays], [650, 572, 2]);
+  assert.equal(rowB.score, 300);
+  assert.ok(rowA.rank < rowB.rank);
+  assert.equal(daily.me.name, 'rank_b');
+
+  assert.equal((await call('/rankings?period=season', { token: guest.token })).me, null); // 게스트는 집계하지 않는다
+  assert.equal((await call('/rankings')).me, null); // 로그인 없이도 볼 수 있다
+  assert.equal((await call('/rankings?period=year')).status, 400);
+});
+
+test('시즌은 그달 첫날부터 마지막 날까지다', () => {
+  assert.deepEqual(seasonRange('2028-02-15'), { from: '2028-02-01', to: '2028-02-29' });
+  assert.deepEqual(seasonRange('2026-12-31'), { from: '2026-12-01', to: '2026-12-31' });
+});
+
+test('닉네임: 회원만, 형식 검사, 겹치면 거부. 랭킹과 기록 뒤에도 남는다', async () => {
+  const a = await call('/signup', { body: { username: 'nick_a', password: 'secret12' } });
+  const b = await call('/signup', { body: { username: 'nick_b', password: 'secret12' } });
+  const guest = await call('/guest', { body: {} });
+  assert.equal((await call('/profile', { token: guest.token, body: { nickname: '게스트이름' } })).status, 403);
+  assert.equal((await call('/profile', { token: a.token, body: { nickname: 'a' } })).status, 400);
+  assert.equal((await call('/profile', { token: a.token, body: { nickname: '<b>x</b>' } })).status, 400);
+  assert.equal((await call('/profile', { token: a.token, body: { nickname: '말랑슬라임' } })).user.name, '말랑슬라임');
+  assert.equal((await call('/profile', { token: b.token, body: { nickname: '말랑슬라임' } })).status, 409);
+  assert.equal((await call('/profile', { token: b.token, body: { nickname: 'nick_a' } })).status, 409);
+  assert.equal((await call('/profile', { token: a.token, body: { nickname: '말랑슬라임' } })).user.name, '말랑슬라임'); // 자기 이름은 그대로 저장
+  await call('/records', { token: a.token, body: { time: 590, kills: { slime: 400 } } });
+  assert.equal((await call('/me', { token: a.token })).user.name, '말랑슬라임');
+  assert.ok((await call('/rankings')).top.some(r => r.name === '말랑슬라임'));
+});
+
+test('구글 회원의 실명은 랭킹에 나오지 않는다', async () => {
+  const g = await call('/google', { body: { credential: 'google:rank' } });
+  await call('/records', { token: g.token, body: { time: 590, kills: { slime: 350 } } });
+  const row = (await call('/rankings', { token: g.token })).me;
+  assert.equal(row.name, `플레이어${g.user.id}`);
+});
+
+test('비밀번호 바꾸기: 지금 비밀번호가 맞아야 하고, 바꾼 뒤 새 비밀번호로만 로그인된다', async () => {
+  const a = await call('/signup', { body: { username: 'pw_a', password: 'secret12' } });
+  assert.equal((await call('/password', { token: a.token, body: { current: 'wrong12', next: 'newsecret1' } })).status, 401);
+  assert.equal((await call('/password', { token: a.token, body: { current: 'secret12', next: '123' } })).status, 400);
+  assert.equal((await call('/password', { token: a.token, body: { current: 'secret12', next: 'newsecret1' } })).ok, true);
+  assert.equal((await call('/login', { body: { username: 'pw_a', password: 'secret12' } })).status, 401);
+  assert.ok((await call('/login', { body: { username: 'pw_a', password: 'newsecret1' } })).token);
+  const guest = await call('/guest', { body: {} });
+  assert.equal((await call('/password', { token: guest.token, body: { current: 'x', next: 'newsecret1' } })).status, 400);
 });
 
 test('영웅별 점수는 따로 쌓인다', async () => {
