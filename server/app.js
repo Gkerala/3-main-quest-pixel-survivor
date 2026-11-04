@@ -4,7 +4,7 @@ import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
-import { validateRecord, addToProgress } from '../web/js/rules.js';
+import { validateRecord, addToProgress, HEROES } from '../web/js/rules.js';
 
 const USERNAME = /^[a-zA-Z0-9_]{3,20}$/;
 const MIN_PASSWORD = 6;
@@ -23,7 +23,7 @@ const publicUser = u => ({
   progress: u.progress ?? {}, // 얻은 영웅, 영웅별 누적 점수, 도감
 });
 
-export function createApp({ store, jwtSecret, verifyGoogle, corsOrigins }) {
+export function createApp({ store, jwtSecret, verifyGoogle, corsOrigins, adminUsernames = [] }) {
   if (!jwtSecret) throw new Error('JWT_SECRET이 필요합니다');
   const app = express();
   app.set('trust proxy', 1); // Render 프록시 한 겹 뒤의 실제 IP로 요청 횟수를 센다
@@ -32,7 +32,11 @@ export function createApp({ store, jwtSecret, verifyGoogle, corsOrigins }) {
   app.use('/api', rateLimit({ windowMs: 60_000, limit: 60 }));
 
   const sign = user => jwt.sign({ sub: user.id }, jwtSecret, { expiresIn: TOKEN_LIFE });
-  const reply = async (res, user) => res.json({ token: sign(user), user: publicUser(user) });
+  // 관리자는 모든 영웅이 열려 있다. 저장하지 않고 보여 줄 때만 더해서, 목록에서 빼면 바로 원래대로 돌아간다
+  const isAdmin = user => !!user.username && adminUsernames.includes(user.username);
+  const withAdmin = (user, progress) => (isAdmin(user) ? { ...progress, heroes: HEROES.filter(h => h !== 'sprout') } : progress);
+  const shownUser = user => publicUser({ ...user, progress: withAdmin(user, user.progress ?? {}) });
+  const reply = async (res, user) => res.json({ token: sign(user), user: shownUser(user) });
 
   // Authorization: Bearer <토큰>이 있으면 그 유저, 없으면 null. 토큰이 틀리면 401
   async function currentUser(req) {
@@ -116,7 +120,7 @@ export function createApp({ store, jwtSecret, verifyGoogle, corsOrigins }) {
     const record = { time, kills, hero, boss, pierce, lowHp };
     let check = validateRecord(record);
     // 보스를 이겨서 얻지 않은 영웅으로 낸 기록은 버그로 본다
-    if (check.ok && hero !== 'sprout' && !user.progress?.heroes?.includes(hero)) check = { ok: false, reason: `아직 얻지 않은 영웅: ${hero}` };
+    if (check.ok && hero !== 'sprout' && !isAdmin(user) && !user.progress?.heroes?.includes(hero)) check = { ok: false, reason: `아직 얻지 않은 영웅: ${hero}` };
     const score = check.ok ? check.score : 0;
     await store.addRecord({ userId: user.id, time, kills, score, valid: check.ok, hero: String(hero), boss: boss?.key ?? null, bossKilled: !!boss?.killed });
     let progress = user.progress ?? {}, unlocked = null;
@@ -124,13 +128,13 @@ export function createApp({ store, jwtSecret, verifyGoogle, corsOrigins }) {
       ({ progress, unlocked } = addToProgress(progress, record, score));
       await store.updateUser(user.id, { progress });
     }
-    res.status(201).json({ valid: check.ok, reason: check.reason, score, best: await store.bestScore(user.id), progress, unlocked });
+    res.status(201).json({ valid: check.ok, reason: check.reason, score, best: await store.bestScore(user.id), progress: withAdmin(user, progress), unlocked });
   });
 
   // 내 기록 보기
   app.get('/api/me', async (req, res) => {
     const user = await requireUser(req);
-    res.json({ user: publicUser(user), best: await store.bestScore(user.id) });
+    res.json({ user: shownUser(user), best: await store.bestScore(user.id) });
   });
 
   app.use((req, res) => res.status(404).json({ error: '없는 주소입니다' }));
